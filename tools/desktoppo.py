@@ -30,7 +30,7 @@ if (directory != '') and (os.path.isdir(directory) == False):
 # Find all desktop files
 files = []
 for rootdir, dirnames, filenames in os.walk(directory):
-    files.extend(glob.glob(rootdir + "/*.desktop"))
+    files.extend(glob.glob(f"{rootdir}/*.desktop"))
 
 # Define Templates and po directory name
 messagetemplate='(?<=\n)(Name=.*?\n|Comment=.*?\n|GenericName=.*?\n)'
@@ -84,33 +84,30 @@ for langfile in files:
 pot.save('./po/desktop/dnfdragora_desktop.pot')
 
 # Merge translations
-for pofile in glob.glob(podir + '/*.po'):
-  lang = pofile[:-3].rsplit('/',1)[1]
-  pofilename = pofile
-  po = polib.pofile(pofilename)
-  po.merge(pot)
-  po.save(pofilename)
-
-for langfile in files:
-  #open desktop file
-  deskfile = open(langfile,"r")
-  text = deskfile.read()
-  deskfile.close()
-  deskfile = open(langfile,"w")
-  for transblock in tpattern.findall(text):
-    text = text.replace(transblock, '')
-
-  # Parse PO files
-  for pofile in sorted(glob.glob(podir + '/*.po'), reverse = True):
+for pofile in glob.glob(f'{podir}/*.po'):
     lang = pofile[:-3].rsplit('/',1)[1]
     pofilename = pofile
     po = polib.pofile(pofilename)
-    for entry in po.translated_entries():
-      if entry.msgid in text:
-        origmessage = '\n' + entry.msgctxt + '=' + entry.msgid + '\n'
-        origandtranslated = '\n' + entry.msgctxt + '=' + entry.msgid + '\n' + entry.msgctxt + '[' + lang + ']=' + entry.msgstr + '\n'
-        text = text.replace(origmessage, origandtranslated)
+    po.merge(pot)
+    po.save(pofilename)
 
-  deskfile.write(text)
-  deskfile.close()
+for langfile in files:
+    with open(langfile,"r") as deskfile:
+        text = deskfile.read()
+    with open(langfile,"w") as deskfile:
+        for transblock in tpattern.findall(text):
+          text = text.replace(transblock, '')
+
+          # Parse PO files
+        for pofile in sorted(glob.glob(f'{podir}/*.po'), reverse = True):
+            lang = pofile[:-3].rsplit('/',1)[1]
+            pofilename = pofile
+            po = polib.pofile(pofilename)
+            for entry in po.translated_entries():
+              if entry.msgid in text:
+                origmessage = '\n' + entry.msgctxt + '=' + entry.msgid + '\n'
+                origandtranslated = '\n' + entry.msgctxt + '=' + entry.msgid + '\n' + entry.msgctxt + '[' + lang + ']=' + entry.msgstr + '\n'
+                text = text.replace(origmessage, origandtranslated)
+
+        deskfile.write(text)
 

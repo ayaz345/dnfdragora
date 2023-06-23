@@ -44,7 +44,6 @@ class BaseDragora:
     
     def release_infobar(self):
         print ("release_infobar not implemented")
-        pass
 
     @property
     def backend(self):
@@ -79,12 +78,11 @@ class BaseDragora:
         if it is not locked, then lock it
         """
         if self._root_backend is None:
-          self._root_backend = dnfdragora.dnf_backend.DnfRootBackend(self, self._use_comps)
-          if self._root_locked is False:
-            logger.debug('Lock the DNF root daemon')
-            self._root_backend.Lock()
-        else:
-          if self._root_locked is False:
+            self._root_backend = dnfdragora.dnf_backend.DnfRootBackend(self, self._use_comps)
+            if self._root_locked is False:
+              logger.debug('Lock the DNF root daemon')
+              self._root_backend.Lock()
+        elif self._root_locked is False:
             logger.warning('Get root backend. Locked (%s)', self._root_locked)
 
 
@@ -143,16 +141,16 @@ class BaseDragora:
         """
         close = True
         msg = str(e)
-        logger.error('BASE EXCEPTION : %s ' % msg)
+        logger.error(f'BASE EXCEPTION : {msg} ')
         err, errmsg = self._parse_error(msg)
-        logger.debug('BASE err:  [%s] - msg: %s' % (err, errmsg))
+        logger.debug(f'BASE err:  [{err}] - msg: {errmsg}')
         if err == 'LockedError':
             errmsg = 'DNF is locked by another process.\n' \
-                '\ndnfdragora will exit'
+                    '\ndnfdragora will exit'
             close = False
         elif err == 'NoReply':
             errmsg = 'DNF D-Bus backend is not responding.\n' \
-                '\ndnfdragora will exit'
+                    '\ndnfdragora will exit'
             close = False
         if errmsg == '':
             errmsg = msg
@@ -174,8 +172,7 @@ class BaseDragora:
 
     def _parse_error(self, value):
         """Parse values from a DBus related exception."""
-        res = const.DBUS_ERR_RE.match(str(value))
-        if res:
+        if res := const.DBUS_ERR_RE.match(str(value)):
             err = res.groups()[0]
             err = err.split('.')[-1]
             msg = res.groups()[1]

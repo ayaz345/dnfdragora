@@ -5,8 +5,8 @@ class GroupIcons:
     def __init__(self, icon_path=None):
 
         if icon_path:
-            self.icon_path = icon_path if icon_path.endswith('/') else icon_path + "/"
-            self.mini_icon_path = self.icon_path + "mini/"
+            self.icon_path = icon_path if icon_path.endswith('/') else f"{icon_path}/"
+            self.mini_icon_path = f"{self.icon_path}mini/"
         else:
             self.icon_path = '/usr/share/icons/'
             self.mini_icon_path = '/usr/share/icons/mini/'
@@ -649,12 +649,10 @@ class GroupIcons:
         '''
         return self._group_info
     
-    def _group(self, k, group_dic) :
-        if k in group_dic:
-            return group_dic[k]
-        return None
+    def _group(self, k, group_dic):
+        return group_dic[k] if k in group_dic else None
     
-    def icon(self, group, separator='/') :
+    def icon(self, group, separator='/'):
         '''
         from the given group as a pathname return the related icon
         if icon_path is passed to the constructor, icon_path/ and icon_path/mini
@@ -670,11 +668,7 @@ class GroupIcons:
             else:
                 g = None
                 break
-        
-        if g and 'icon' in g:
-            icon_path += g['icon']
-        else:
-            icon_path += "applications_section.png"
-            
+
+        icon_path += g['icon'] if g and 'icon' in g else "applications_section.png"
         return icon_path
 

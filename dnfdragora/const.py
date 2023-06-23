@@ -8,6 +8,7 @@ Author:  Angelo Naselli <anaselli@linux.it>
 @package dnfdragora
 '''
 
+
 # NOTE part of this code is imported from yumex-dnf
 
 import os.path
@@ -26,38 +27,34 @@ NEEDED_DAEMON_API = 2  # The needed dnfdaemon API version
 BIN_PATH = os.path.abspath(os.path.dirname(sys.argv[0]))
 if BIN_PATH in ["/usr/bin", "/bin"]:
     DATA_DIR = '/usr/share/dnfdragora'
-    PIX_DIR = DATA_DIR + "/gfx"
+    PIX_DIR = f"{DATA_DIR}/gfx"
     MISC_DIR = DATA_DIR
 else:
     DATA_DIR = BIN_PATH
-    PIX_DIR = DATA_DIR + "/../gfx"
-    MISC_DIR = DATA_DIR + "/../misc"
+    PIX_DIR = f"{DATA_DIR}/../gfx"
+    MISC_DIR = f"{DATA_DIR}/../misc"
 
 HOME_DIR = os.environ['HOME']
-AUTOSTART_DIR = HOME_DIR + '/.config/autostart'
-USER_DESKTOP_FILE = AUTOSTART_DIR + '/dnfdragora-updater.desktop'
-SYS_DESKTOP_FILE = MISC_DIR + "/dnfdragora-updater.desktop"
-LEGACY_DESKTOP_FILE = AUTOSTART_DIR + "/dnfdragora.desktop"
+AUTOSTART_DIR = f'{HOME_DIR}/.config/autostart'
+USER_DESKTOP_FILE = f'{AUTOSTART_DIR}/dnfdragora-updater.desktop'
+SYS_DESKTOP_FILE = f"{MISC_DIR}/dnfdragora-updater.desktop"
+LEGACY_DESKTOP_FILE = f"{AUTOSTART_DIR}/dnfdragora.desktop"
 
 
 ARCH = subprocess.check_output(
     '/usr/bin/rpm --eval %_arch', shell=True).decode("utf-8")[:-1]
 
 ARCH_DICT = {
-    "x86_64": set(['x86_64', 'i686', 'i586', 'i386', 'noarch']),
-    "i386": set(['i686', 'i586', 'i386', 'noarch']),
-    "armhfp": set(['armv7hl', 'armv7hnl', 'armv8hnl', 'noarch']),
-    "aarch64": set(['aarch64', 'noarch']),
-    "ppc64le": set(['ppc64le', 'noarch']),
-    "s390x": set(['s390x', 'noarch'])
+    "x86_64": {'x86_64', 'i686', 'i586', 'i386', 'noarch'},
+    "i386": {'i686', 'i586', 'i386', 'noarch'},
+    "armhfp": {'armv7hl', 'armv7hnl', 'armv8hnl', 'noarch'},
+    "aarch64": {'aarch64', 'noarch'},
+    "ppc64le": {'ppc64le', 'noarch'},
+    "s390x": {'s390x', 'noarch'},
 }
 
 # arch for this platform
-if ARCH in ARCH_DICT:
-    PLATFORM_ARCH = ARCH_DICT[ARCH]
-else:  # use x86_64 as fallback
-    PLATFORM_ARCH = ARCH_DICT['x86_64']
-
+PLATFORM_ARCH = ARCH_DICT.get(ARCH, ARCH_DICT['x86_64'])
 DBUS_ERR_RE = re.compile(r'.*GDBus.Error:([\w\.]*): (.*)$')
 
 # Constants

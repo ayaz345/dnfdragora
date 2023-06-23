@@ -35,14 +35,11 @@ class TransactionProgress(dnf.callback.TransactionProgress):
         """
         if package:
             # package can be both str or dnf package object
-            if not isinstance(package, str):
-                pkg_id = str(package)
-            else:
-                pkg_id = package
+            pkg_id = str(package) if not isinstance(package, str) else package
             if action in self.actions:
                 action = self.actions[action]
 
-            print ("%s %s"%(pkg_id, action))
+            print(f"{pkg_id} {action}")
             #self.base.RPMProgress(
                 #pkg_id, action, te_current, te_total, ts_current, ts_total)
 
@@ -148,14 +145,12 @@ class Progress(dnf.callback.DownloadProgress):
     def end(self,payload, status, msg):
         if not status: # payload download complete
             self.download_files += 1
-            self.update()
-        else: # dnl end with errors
-            self.update()
+        self.update()
         self.progressbar.setValue(100)
 
     def progress(self, payload, done):
         pload = str(payload)
-        if not pload in self.dnl:
+        if pload not in self.dnl:
             self.dnl[pload] = 0.0
             text = _("Starting to download : %s ") % str(payload)
             self._setLabel(self.label_widget, text)
@@ -173,8 +168,7 @@ class Progress(dnf.callback.DownloadProgress):
         tot = 0.0
         for value in self.dnl.values():
             tot += value
-        pct = int((tot / float(self.total_size)) * 100)
-        return pct
+        return int((tot / float(self.total_size)) * 100)
 
     def update(self):
         """ Output the current progress"""

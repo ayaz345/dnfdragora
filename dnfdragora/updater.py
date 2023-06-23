@@ -31,7 +31,9 @@ class DnfdragoraUpdaterTray(Tray):
 
     def notify(self, *args, **kw):
         super().notify(*args, **kw)
-        logger.debug('Scheduling notification expiration in {} seconds'.format(self.notification_expire_timeout))
+        logger.debug(
+            f'Scheduling notification expiration in {self.notification_expire_timeout} seconds'
+        )
         # XXX: is this thread-safe?
         threading.Timer(self.notification_expire_timeout, self.remove_notification).start()
 
@@ -57,7 +59,7 @@ class Updater:
                 if 'interval for checking updates' in settings.keys() :
                     self.__updateInterval = int(settings['interval for checking updates'])
                 self.__hide_menu = settings['hide_update_menu'] if 'hide_update_menu' in settings.keys() \
-                  else False
+                      else False
 
                 #### Logging
                 if 'log' in settings.keys():
@@ -71,16 +73,18 @@ class Updater:
                         self.__level_debug = log['level_debug']
 
         if self.__log_enabled:
-          if self.__log_directory:
-            log_filename = os.path.join(self.__log_directory, "dnfdragora-updater.log")
-            if self.__level_debug:
-              misc.logger_setup(log_filename, loglvl=logging.DEBUG)
-            else:
-              misc.logger_setup(log_filename)
-            print("Logging into %s, debug mode is %s"%(self.__log_directory, ("enabled" if self.__level_debug else "disabled")))
-            logger.info("dnfdragora-updater started")
+            if self.__log_directory:
+                log_filename = os.path.join(self.__log_directory, "dnfdragora-updater.log")
+                if self.__level_debug:
+                  misc.logger_setup(log_filename, loglvl=logging.DEBUG)
+                else:
+                  misc.logger_setup(log_filename)
+                print(
+                    f'Logging into {self.__log_directory}, debug mode is {"enabled" if self.__level_debug else "disabled"}'
+                )
+                logger.info("dnfdragora-updater started")
         else:
-           print("Logging disabled")
+            print("Logging disabled")
 
         # if missing gets the default icon from our folder (same as dnfdragora)
         icon_path = '/usr/share/dnfdragora/images/'
@@ -88,48 +92,64 @@ class Updater:
         if 'icon-path' in options.keys() :
             icon_path = options['icon-path']
         if icon_path.endswith('/'):
-            icon_path = icon_path + 'dnfdragora.svg' if ( os.path.exists(icon_path + 'dnfdragora.svg') ) else icon_path + 'dnfdragora.png'
+            icon_path = (
+                f'{icon_path}dnfdragora.svg'
+                if os.path.exists(f'{icon_path}dnfdragora.svg')
+                else f'{icon_path}dnfdragora.png'
+            )
         else:
-            icon_path = icon_path + '/dnfdragora.svg' if ( os.path.exists(icon_path + '/dnfdragora.svg') ) else icon_path + '/dnfdragora.png'
+            icon_path = (
+                f'{icon_path}/dnfdragora.svg'
+                if os.path.exists(f'{icon_path}/dnfdragora.svg')
+                else f'{icon_path}/dnfdragora.png'
+            )
 
         theme_icon_pathname = icon_path if 'icon-path' in options.keys() else self.__get_theme_icon_pathname() or icon_path
 
-        logger.debug("Icon: %s"%(theme_icon_pathname))
+        logger.debug(f"Icon: {theme_icon_pathname}")
         #empty icon as last chance
         self.__icon = Image.Image()
         try:
-          if theme_icon_pathname.endswith('.svg'):
-              with open(theme_icon_pathname, 'rb') as svg:
-                  self.__icon = self.__svg_to_Image(svg.read())
-          else:
-              self.__icon  = Image.open(theme_icon_pathname)
+            if theme_icon_pathname.endswith('.svg'):
+                with open(theme_icon_pathname, 'rb') as svg:
+                    self.__icon = self.__svg_to_Image(svg.read())
+            else:
+                self.__icon  = Image.open(theme_icon_pathname)
         except Exception as e:
-          logger.error(e)
-          logger.error("Cannot open theme icon using default one %s"%(icon_path))
-          self.__icon  = Image.open(icon_path)
+            logger.error(e)
+            logger.error(f"Cannot open theme icon using default one {icon_path}")
+            self.__icon  = Image.open(icon_path)
 
         # resetting icon_path to default value
         icon_path = '/usr/share/dnfdragora/images/'
         if 'icon-path' in options.keys() :
             icon_path = options['icon-path']
         if icon_path.endswith('/'):
-            icon_path = icon_path + 'dnfdragora-update.svg' if ( os.path.exists(icon_path + 'dnfdragora-update.svg') ) else icon_path + 'dnfdragora-update.png'
+            icon_path = (
+                f'{icon_path}dnfdragora-update.svg'
+                if os.path.exists(f'{icon_path}dnfdragora-update.svg')
+                else f'{icon_path}dnfdragora-update.png'
+            )
         else:
-            icon_path = icon_path + '/dnfdragora-update.svg' if ( os.path.exists(icon_path + '/dnfdragora-update.svg') ) else icon_path + '/dnfdragora-update.png'
+            icon_path = (
+                f'{icon_path}/dnfdragora-update.svg'
+                if os.path.exists(f'{icon_path}/dnfdragora-update.svg')
+                else f'{icon_path}/dnfdragora-update.png'
+            )
 
         theme_icon_pathname = icon_path if 'icon-path' in options.keys() else self.__get_theme_icon_pathname(name="dnfdragora-update") or icon_path
 
         self.__icon_update = Image.Image()
         try:
-          if theme_icon_pathname.endswith('.svg'):
-              with open(theme_icon_pathname, 'rb') as svg:
-                  self.__icon_update = self.__svg_to_Image(svg.read())
-          else:
-              self.__icon_update  = Image.open(theme_icon_pathname)
+            if theme_icon_pathname.endswith('.svg'):
+                with open(theme_icon_pathname, 'rb') as svg:
+                    self.__icon_update = self.__svg_to_Image(svg.read())
+            else:
+                self.__icon_update  = Image.open(theme_icon_pathname)
         except Exception as e:
-          logger.error(e)
-          logger.error("Cannot open theme icon using default one %s"%(icon_path))
-          self.__icon_update  = Image.open(icon_path)
+            logger.error(e)
+            logger.error(f"Cannot open theme icon using default one {icon_path}")
+            self.__icon_update  = Image.open(icon_path)
 
         try:
             self.__backend = dnfd_client.Client()
@@ -156,18 +176,17 @@ class Updater:
 
 
     def __get_theme_icon_pathname(self, name='dnfdragora'):
-      '''
+        '''
         return theme icon pathname or None if missing
       '''
-      try:
-          import xdg.IconTheme
-      except ImportError:
-          logger.error("Error: module xdg.IconTheme is missing")
-          return None
-      else:
-          pathname = xdg.IconTheme.getIconPath(name, 256)
-          return pathname
-      return None
+        try:
+            import xdg.IconTheme
+        except ImportError:
+            logger.error("Error: module xdg.IconTheme is missing")
+            return None
+        else:
+            return xdg.IconTheme.getIconPath(name, 256)
+        return None
 
     def __svg_to_Image(self, svg_string):
       '''
@@ -181,9 +200,11 @@ class Updater:
 
     def __shutdown(self, *kwargs):
         logger.info("shutdown")
-        if self.__main_gui :
-          logger.warning("Cannot exit dnfdragora is not deleted %s"%("and RUNNING" if self.__main_gui.running else "but NOT RUNNING"))
-          return
+        if self.__main_gui:
+            logger.warning(
+                f'Cannot exit dnfdragora is not deleted {"and RUNNING" if self.__main_gui.running else "but NOT RUNNING"}'
+            )
+            return
         try:
           self.__running = False
           self.__updater.join()
@@ -234,7 +255,7 @@ class Updater:
       return False
 
     def __run_dialog(self, args, *kwargs):
-        if self.__tray != None and self.__main_gui == None and self.__tray.visible:
+        if self.__tray != None and self.__main_gui is None and self.__tray.visible:
             if self.__hide_menu:
               self.__tray.visible = False
             time.sleep(0.5)
@@ -261,10 +282,9 @@ class Updater:
             # Let's delay a bit the check, otherwise Lock will fail
             done=self.__reschedule_update_in(0.5)
             logger.debug("Scheduled %s", "done" if done else "skipped")
-        else:
-          if self.__main_gui:
+        elif self.__main_gui:
             logger.warning("Cannot run dnfdragora because it is already running")
-          else:
+        else:
             logger.warning("Cannot run dnfdragora")
 
     def __run_dnfdragora(self, *kwargs):
@@ -300,102 +320,96 @@ class Updater:
         logger.error(_('Exception caught: [%s]')%(str(e)))
 
     def __OnRepoMetaDataProgress(self, name, frac):
-      '''Repository Metadata Download progress.'''
-      values = (name, frac)
-      #print('on_RepoMetaDataProgress (root): %s', repr(values))
-      if frac == 0.0 or frac == 1.0:
-        logger.debug('OnRepoMetaDataProgress: %s', repr(values))
+        '''Repository Metadata Download progress.'''
+        values = (name, frac)
+          #print('on_RepoMetaDataProgress (root): %s', repr(values))
+        if frac in [0.0, 1.0]:
+            logger.debug('OnRepoMetaDataProgress: %s', repr(values))
 
     def __update_loop(self):
-      self.__get_updates()
-      backend_locked = False
+        self.__get_updates()
+        backend_locked = False
 
-      while self.__running == True:
-        update_next = self.__updateInterval
-        add_to_schedule = False
-        try:
-          counter = 0
-          count_max = 1000
+        while self.__running == True:
+            update_next = self.__updateInterval
+            add_to_schedule = False
+            try:
+                count_max = 1000
 
-          #if dnfdragora is running we receive transaction/rpm progress/download etc events
-          #let's dequeue them as quick as possible
-          while counter < count_max:
-            counter = counter + 1
+                      #if dnfdragora is running we receive transaction/rpm progress/download etc events
+                      #let's dequeue them as quick as possible
+                for _ in range(count_max):
+                    item = self.__backend.eventQueue.get_nowait()
+                    event = item['event']
+                    info = item['value']
 
-            item = self.__backend.eventQueue.get_nowait()
-            event = item['event']
-            info = item['value']
+                    if (event == 'Lock'):
+                        logger.info("Event received %s - info %s", event, str(info))
+                        backend_locked = info['result']
+                        if backend_locked:
+                          self.__backend.GetPackages('updates_all')
+                          logger.debug("Getting update packages")
+                        else:
+                          # no locked try again in a minute
+                          update_next = 1
+                          add_to_schedule = True
+                    elif (event == 'OnRepoMetaDataProgress'):
+                      #let's log metadata since slows down the Lock requests
+                      self.__OnRepoMetaDataProgress(info['name'], info['frac'])
+                    elif (event == 'GetPackages'):
+                        logger.debug("Got GetPackages event menu visibility is %s", str(self.__tray.visible))
+                        #if not self.__tray.visible :
+                        # ugly workaround to show icon if hidden, set empty icon and show it
+                        self.__tray.icon = Image.Image()
+                        self.__tray.visible = True
+                        logger.debug("Event received %s", event)
+                        if info['error']:
+                            # error
+                            logger.error("GetPackages error %s", str(info['error']))
+                        else:
+                            self.__update_count = len(info['result'])
+                            logger.info("Found %d updates"%(self.__update_count))
 
-            if (event == 'Lock') :
-              logger.info("Event received %s - info %s", event, str(info))
-              backend_locked = info['result']
-              if backend_locked:
-                self.__backend.GetPackages('updates_all')
-                logger.debug("Getting update packages")
-              else:
-                # no locked try again in a minute
-                update_next = 1
-                add_to_schedule = True
-            elif (event == 'OnRepoMetaDataProgress'):
-              #let's log metadata since slows down the Lock requests
-              self.__OnRepoMetaDataProgress(info['name'], info['frac'])
-            elif (event == 'GetPackages'):
-              logger.debug("Got GetPackages event menu visibility is %s", str(self.__tray.visible))
-              #if not self.__tray.visible :
-              # ugly workaround to show icon if hidden, set empty icon and show it
-              self.__tray.icon = Image.Image()
-              self.__tray.visible = True
-              logger.debug("Event received %s", event)
-              if not info['error']:
-                po_list = info['result']
-                self.__update_count = len(po_list)
-                logger.info("Found %d updates"%(self.__update_count))
+                            if (self.__update_count >= 1):
+                              self.__tray.icon = self.__icon_update
+                              self.__tray.visible = True
+                              self.__tray.notify(title='dnfdragora-update', message=_('%d updates available.') % self.__update_count)
+                            elif self.__getUpdatesRequested :
+                              # __update_count == 0 but get updates has been requested by user command
+                              # Let's give a feed back anyway
+                              logger.debug("No updates found after user request")
+                              self.__tray.icon = self.__icon
+                              self.__tray.notify(title='dnfdragora-update', message=_('No updates available'))
+                              self.__tray.visible = not self.__hide_menu
+                            else:
+                              self.__tray.icon = self.__icon
+                              self.__tray.visible = not self.__hide_menu
+                              logger.debug("No updates found")
+                            self.__getUpdatesRequested = False
+                            logger.debug("Menu visibility is %s", str(self.__tray.visible))
+                        #force scheduling again
+                        add_to_schedule = True
+                        # Let's release the db
+                        self.__backend.Unlock(sync=True)
+                        backend_locked = False
+                        logger.debug("RPM DB unlocked")
+                    elif backend_locked:
+                        logger.warning("Unmanaged event received %s - info %s", event, str(info))
 
-                if (self.__update_count >= 1):
-                  self.__tray.icon = self.__icon_update
-                  self.__tray.visible = True
-                  self.__tray.notify(title='dnfdragora-update', message=_('%d updates available.') % self.__update_count)
-                elif self.__getUpdatesRequested :
-                  # __update_count == 0 but get updates has been requested by user command
-                  # Let's give a feed back anyway
-                  logger.debug("No updates found after user request")
-                  self.__tray.icon = self.__icon
-                  self.__tray.notify(title='dnfdragora-update', message=_('No updates available'))
-                  self.__tray.visible = not self.__hide_menu
-                else:
-                  self.__tray.icon = self.__icon
-                  self.__tray.visible = not self.__hide_menu
-                  logger.debug("No updates found")
-                self.__getUpdatesRequested = False
-                logger.debug("Menu visibility is %s", str(self.__tray.visible))
-              else:
-                # error
-                logger.error("GetPackages error %s", str(info['error']))
-              #force scheduling again
-              add_to_schedule = True
-              # Let's release the db
-              self.__backend.Unlock(sync=True)
-              backend_locked = False
-              logger.debug("RPM DB unlocked")
-            #elif (event == xxx)
-            else:
-              if backend_locked:
-                logger.warning("Unmanaged event received %s - info %s", event, str(info))
+            except Empty as e:
+              pass
 
-        except Empty as e:
-          pass
+            if add_to_schedule:
+              self.__reschedule_update_in(update_next)
+            elif self.__scheduler.empty():
+              # if the scheduler is empty we schedule a check according
+              # to configuration file anyway
+              self.__scheduler.enter(update_next * 60, 1, self.__get_updates)
+              logger.info("Scheduled check for updates in %d minutes", update_next)
+            self.__scheduler.run(blocking=False)
+            time.sleep(0.5)
 
-        if add_to_schedule:
-          self.__reschedule_update_in(update_next)
-        elif self.__scheduler.empty():
-          # if the scheduler is empty we schedule a check according
-          # to configuration file anyway
-          self.__scheduler.enter(update_next * 60, 1, self.__get_updates)
-          logger.info("Scheduled check for updates in %d minutes", update_next)
-        self.__scheduler.run(blocking=False)
-        time.sleep(0.5)
-
-      logger.info("Update loop end")
+        logger.info("Update loop end")
 
 
     def __main_loop(self):

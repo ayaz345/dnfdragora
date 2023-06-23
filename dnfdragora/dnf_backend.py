@@ -80,8 +80,7 @@ class DnfPackage(dnfdragora.backend.Package):
         if self.action == 'li':
             return self.repoid
         else:
-            return "%s-%s.%s.%s.rpm" % (self.name, self.version,
-                                        self.release, self.arch)
+            return f"{self.name}-{self.version}.{self.release}.{self.arch}.rpm"
     @property
     def group(self):
         """Package group."""
@@ -90,7 +89,7 @@ class DnfPackage(dnfdragora.backend.Package):
     @property
     def fullver(self):
         """Package full version-release."""
-        return "%s-%s" % (self.version, self.release)
+        return f"{self.version}-{self.release}"
 
     @property
     def installed(self):
@@ -142,7 +141,7 @@ class DnfPackage(dnfdragora.backend.Package):
     @property
     def is_update(self):
         """Package is an update/replacement to another package."""
-        return self.action == 'o' or self.action == 'u'
+        return self.action in ['o', 'u']
 
 
 class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
@@ -283,10 +282,7 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
     def get_packages(self, flt):
         """Get packages for a given pkg filter."""
         logger.debug('get-packages : %s ', flt)
-        if flt == 'all':
-            filters = ['updates', 'installed', 'available']
-        else:
-            filters = [flt]
+        filters = ['updates', 'installed', 'available'] if flt == 'all' else [flt]
         result = []
         for pkg_flt in filters:
             # is this type of packages is already cached ?
@@ -302,9 +298,9 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
     def _get_groups_from_packages(self):
         """Get groups by looking for all packages group property."""
         try:
-          packages = self.get_packages('all')
+            packages = self.get_packages('all')
         except Exception as err:
-          logger.error("Exception %s"%(err))
+            logger.error(f"Exception {err}")
         logger.debug('_get-groups-from-packages got %d',len(packages))
         result = []
         append = result.append
@@ -323,8 +319,7 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
     @ExceptionHandler
     def get_repo_ids(self, flt):
         """Get repository ids"""
-        repos = self.GetRepositories(flt, sync=True)
-        return repos
+        return self.GetRepositories(flt, sync=True)
 
     @ExceptionHandler
     def get_repositories(self, flt='*'):
@@ -352,35 +347,35 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
 
     @TimeFunction
     def __search_loop(self, filter, attr, regexp):
-      '''
+        '''
       Async thread loop to be used in searching. Requires package caching performed.
       Emits a "RESearch" dnfdaemon client like event.
       '''
-      pl = self.get_packages(filter)
-      logger.debug("Searching <%s> from <%s> attribute into %d packages", regexp, attr, len(pl))
-      packages = []
-      exe_error = None
-      if len(pl) > 0:
-        if not hasattr(pl[0], attr):
-          exe_error = _("package has not any %s attributes"%(attr))
-          logger.error("package has not any %s attributes", attr)
+        pl = self.get_packages(filter)
+        logger.debug("Searching <%s> from <%s> attribute into %d packages", regexp, attr, len(pl))
+        packages = []
+        exe_error = None
+        if len(pl) > 0:
+            if not hasattr(pl[0], attr):
+                exe_error = _(f"package has not any {attr} attributes")
+                logger.error("package has not any %s attributes", attr)
 
-      if exe_error == None:
-        try:
-          s = re.compile(regexp)
-          #for p in pl:
-            #if hasattr(p, attr) and s.search(str(getattr(p, attr))):
-              #packages.append(p)
-            #elif not hasattr(p, attr):
-              #logger.error("package has not any %s attributes", attr)
-          packages = [ p for p in pl if s.search(str(getattr(p, attr))) ]
-        except Exception as e:
-          logger.error(str(e))
-          exe_error = str(e)
+        if exe_error is None:
+            try:
+              s = re.compile(regexp)
+              #for p in pl:
+                #if hasattr(p, attr) and s.search(str(getattr(p, attr))):
+                  #packages.append(p)
+                #elif not hasattr(p, attr):
+                  #logger.error("package has not any %s attributes", attr)
+              packages = [ p for p in pl if s.search(str(getattr(p, attr))) ]
+            except Exception as e:
+              logger.error(str(e))
+              exe_error = str(e)
 
-      response = { 'result' : None if exe_error else packages, 'error' : exe_error }
-      self.eventQueue.put({'event': 'RESearch', 'value': response})
-      logger.debug("__search_loop exit. Found %d pacakges", len(packages))
+        response = { 'result' : None if exe_error else packages, 'error' : exe_error }
+        self.eventQueue.put({'event': 'RESearch', 'value': response})
+        logger.debug("__search_loop exit. Found %d pacakges", len(packages))
 
     @TimeFunction
     @ExceptionHandler
@@ -391,27 +386,29 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
         :param regexp: regular expression using python syntax to search for
         """
         if sync:
-          packages = [p for p in self.get_packages(filter) if re.search(regexp, str(p.get_attribute(attr))) ]  # str(p.filelist)) ]
-          return packages
-        else:
-          t = threading.Thread(target=self.__search_loop, args=(filter, attr, regexp))
-          t.start()
+            return [
+                p
+                for p in self.get_packages(filter)
+                if re.search(regexp, str(p.get_attribute(attr)))
+            ]
+        t = threading.Thread(target=self.__search_loop, args=(filter, attr, regexp))
+        t.start()
 
 
     @ExceptionHandler
     @TimeFunction
-    def _cacheProtected(self) :
+    def _cacheProtected(self):
         '''
         gets all the protected packages
         '''
         self._protected = []
         protected_conf_path='/etc/dnf/protected.d'
         conf_files = listdir(protected_conf_path)
-        for f in conf_files :
-            file_path = protected_conf_path + '/' + f
+        for f in conf_files:
+            file_path = f'{protected_conf_path}/{f}'
             with open(file_path, 'r') as content_file:
                 for line in content_file:
-                    if line.strip() :
+                    if line.strip():
                         match_all = False
                         newest_only = False
                         tags =""
@@ -419,36 +416,34 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
 
                         for pkg in pkgs:
                             pkg_id = pkg.pkg_id
-                            if (not pkg_id in self._protected) :
+                            if pkg_id not in self._protected:
                                 self._protected.append(pkg_id)
                         # TODO it would be better to get recursive require
                         #for pkg_id in self._protected:
                             #recursive_id = self.GetAttribute(pkg_id,'requires')
 
 
-    def protected(self, pkg) :
+    def protected(self, pkg):
         '''
         if pkg is not none returns if the given package is a protected one
         '''
         if not self._protected :
             self._cacheProtected()
 
-        found = pkg.pkg_id in self._protected
+        return pkg.pkg_id in self._protected
 
-        return found
-
-    def _getAllGroupIDList(self, groups, new_groups, g_id=None) :
+    def _getAllGroupIDList(self, groups, new_groups, g_id=None):
         '''
         return a list of group ID as pathnames from comps
         '''
         gid = g_id
         for gl in groups:
             if (isinstance(gl, list)):
-                if (type(gl[0]) is str) :
-                    new_groups.append(gid + "/" + gl[0] if (gid) else gl[0])
+                if (type(gl[0]) is str):
+                    new_groups.append(f"{gid}/{gl[0]}" if gid else gl[0])
                     if not gid :
                         gid = gl[0]
-                else :
+                else:
                     self._getAllGroupIDList(gl, new_groups, gid)
 
     @ExceptionHandler
@@ -481,11 +476,9 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
                 tot = len(rpm_groups)
                 self.frontend.infobar.set_progress(0.0)
                 self.frontend.infobar.info(_('Caching groups from packages... '))
-                g = 0
-                for groupName in rpm_groups:
+                for g, groupName in enumerate(rpm_groups):
                     perc = float(float(g*1.0)/139)
                     self.frontend.infobar.set_progress(perc)
-                    g+=1
                     #NOTE fedora gets packages using the leaf and not a group called X/Y/Z
                     grp = groupName.split("/")
                     #pkgs = self.get_group_packages(grp[-1], 'all')
@@ -493,11 +486,11 @@ class DnfRootBackend(dnfdragora.backend.Backend, dnfdragora.dnfd_client.Client):
                     for pkg_id in pkgs :
                         if pkg_id not in self._pkg_id_to_groups_cache.keys():
                             self._pkg_id_to_groups_cache[pkg_id] = []
-                        self._pkg_id_to_groups_cache[pkg_id].append(groupName) 
+                        self._pkg_id_to_groups_cache[pkg_id].append(groupName)
                 self.frontend.infobar.set_progress(0.0)
                 self.frontend.infobar.info("")
             groups = self._pkg_id_to_groups_cache[pkg.pkg_id] if pkg.pkg_id in self._pkg_id_to_groups_cache.keys() else ['Uncategorized']
-        else :
+        else:
             groups.append(pkg.group)
 
         return groups
