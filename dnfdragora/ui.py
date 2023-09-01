@@ -51,10 +51,7 @@ class UIError(Exception):
     self.msg = msg
 
   def __str__(self):
-    if self.msg:
-      return self.msg
-    else:
-      return ""
+    return self.msg if self.msg else ""
 
 class DNFDragoraStatus(Enum):
     '''
@@ -105,16 +102,10 @@ class PackageQueue:
 
 
     def get(self, action=None):
-        if action is None:
-            return self.packages
-        else:
-            return self.packages[action]
+      return self.packages if action is None else self.packages[action]
 
     def total(self):
-        num = 0
-        for key in const.QUEUE_PACKAGE_TYPES:
-            num += len(self.packages[key])
-        return num
+      return sum(len(self.packages[key]) for key in const.QUEUE_PACKAGE_TYPES)
 
     def add(self, pkg, action):
         """Add a package to queue"""
@@ -142,13 +133,11 @@ class PackageQueue:
         return pkg.installed
 
     def action(self, pkg):
-        '''
+      '''
         returns the action of the queued package or None if package is not queued
         '''
-        pkg_id = pkg.pkg_id
-        if pkg_id in self.actions.keys():
-            return self.actions[pkg_id]
-        return None
+      pkg_id = pkg.pkg_id
+      return self.actions[pkg_id] if pkg_id in self.actions.keys() else None
 
     def remove(self, pkg):
         """Remove package from queue"""
@@ -168,112 +157,114 @@ class mainGui(dnfdragora.basedragora.BaseDragora):
     """
 
     def __init__(self, options={}):
-        '''
+      '''
         constructor
         '''
 
-        self._status = DNFDragoraStatus.STARTUP
-        self._beforeLockAgain = 20 # 20 x 500 ms = 10 sec
-        self.running = False
-        self.loop_has_finished = False
-        self.options = options
-        self._progressBar = None
-        self.packageQueue = PackageQueue()
-        self.toRemove = []
-        self.toInstall = []
-        self.itemList = {}
-        self.appname = "dnfdragora"
-        self._selPkg = None
-        self.md_update_interval = 48 # check any 48 hours as default
-        self.md_last_refresh_date = None
-        self._runtime_option_managed = False
-        # TODO... _package_name, _gpg_confirm imported from old event management
-        # Try to remove them when fixing progress bar
-        self._package_name = None
-        self._action_name = None
-        self._gpg_confirm = None
-        self._files_to_download = 0
-        self._files_downloaded = 0
-        # ...TODO
+      self._status = DNFDragoraStatus.STARTUP
+      self._beforeLockAgain = 20 # 20 x 500 ms = 10 sec
+      self.running = False
+      self.loop_has_finished = False
+      self.options = options
+      self._progressBar = None
+      self.packageQueue = PackageQueue()
+      self.toRemove = []
+      self.toInstall = []
+      self.itemList = {}
+      self.appname = "dnfdragora"
+      self._selPkg = None
+      self.md_update_interval = 48 # check any 48 hours as default
+      self.md_last_refresh_date = None
+      self._runtime_option_managed = False
+      # TODO... _package_name, _gpg_confirm imported from old event management
+      # Try to remove them when fixing progress bar
+      self._package_name = None
+      self._action_name = None
+      self._gpg_confirm = None
+      self._files_to_download = 0
+      self._files_downloaded = 0
+      # ...TODO
 
-        self._transaction_tries = 0
+      self._transaction_tries = 0
 
-        # {
-        #   name-epoch_version-release.arch : { pkg: dnf-pkg, item: YItem}
-        # }
-        self.groupList = {}
-        # {
-        #    localized_name = { "item" : item, "name" : groupName }
-        # }
+      # {
+      #   name-epoch_version-release.arch : { pkg: dnf-pkg, item: YItem}
+      # }
+      self.groupList = {}
+      # {
+      #    localized_name = { "item" : item, "name" : groupName }
+      # }
 
-        self.infoshown = {
-            'updateinfo' : { 'title' : _("Update information"), 'show' : False },
-            'files' : { 'title' : _("File list"), 'show' : False },
-            'changelog' : { 'title' : _("Changelog"), 'show' : False },
-            'requirements' : { 'title' : _("Requirements"), 'show' : False },
-            }
-        self.checkBoxColumn = 0
-        self.use_comps = False
-        self.group_icon_path = None
-        self.images_path = '/usr/share/dnfdragora/images/'
-        self.always_yes = False
-        self.match_all = False
-        self.newest_only = False
-        self.all_updates_filter = False
-        self.log_enabled = False
-        self.log_directory = None
-        self.level_debug = False
-        self.upgrades_as_updates = True # NOTE consider package to upgrade as update
-        self.config = dnfdragora.config.AppConfig(self.appname)
+      self.infoshown = {
+          'updateinfo' : { 'title' : _("Update information"), 'show' : False },
+          'files' : { 'title' : _("File list"), 'show' : False },
+          'changelog' : { 'title' : _("Changelog"), 'show' : False },
+          'requirements' : { 'title' : _("Requirements"), 'show' : False },
+          }
+      self.checkBoxColumn = 0
+      self.use_comps = False
+      self.group_icon_path = None
+      self.images_path = '/usr/share/dnfdragora/images/'
+      self.always_yes = False
+      self.match_all = False
+      self.newest_only = False
+      self.all_updates_filter = False
+      self.log_enabled = False
+      self.log_directory = None
+      self.level_debug = False
+      self.upgrades_as_updates = True # NOTE consider package to upgrade as update
+      self.config = dnfdragora.config.AppConfig(self.appname)
 
-        # settings from configuration file first
-        self._configFileRead()
+      # settings from configuration file first
+      self._configFileRead()
 
-        if self.log_enabled:
-          if self.log_directory:
-            log_filename = os.path.join(self.log_directory, "dnfdragora.log")
-            if self.level_debug:
-              misc.logger_setup(log_filename, loglvl=logging.DEBUG)
-            else:
-              misc.logger_setup(log_filename)
-            print("Logging into %s, debug mode is %s"%(self.log_directory, ("enabled" if self.level_debug else "disabled")))
-            logger.info("dnfdragora started")
-        else:
-           print("Logging disabled")
+      if self.log_enabled:
+        if self.log_directory:
+          log_filename = os.path.join(self.log_directory, "dnfdragora.log")
+          if self.level_debug:
+            misc.logger_setup(log_filename, loglvl=logging.DEBUG)
+          else:
+            misc.logger_setup(log_filename)
+          print(
+              f'Logging into {self.log_directory}, debug mode is {"enabled" if self.level_debug else "disabled"}'
+          )
+          logger.info("dnfdragora started")
+      else:
+        print("Logging disabled")
 
-        # overrides settings from comand line
-        if 'group_icons_path' in self.options.keys() :
-            self.group_icon_path = self.options['group_icons_path']
-        if 'images_path' in self.options.keys() :
-            self.images_path = self.options['images_path']
-        self.update_only = 'update_only' in self.options.keys()
+      # overrides settings from comand line
+      if 'group_icons_path' in self.options.keys() :
+          self.group_icon_path = self.options['group_icons_path']
+      if 'images_path' in self.options.keys() :
+          self.images_path = self.options['images_path']
+      self.update_only = 'update_only' in self.options.keys()
 
-        if self.use_comps and not self.group_icon_path:
-            self.group_icon_path = '/usr/share/pixmaps/comps/'
+      if self.use_comps and not self.group_icon_path:
+          self.group_icon_path = '/usr/share/pixmaps/comps/'
 
-        # Adding / as last har in the path if not present
-        if not self.images_path.endswith('/'):
-            self.images_path += "/"
-        if self.group_icon_path and not self.group_icon_path.endswith('/'):
-            self.group_icon_path += "/"
+      # Adding / as last har in the path if not present
+      if not self.images_path.endswith('/'):
+          self.images_path += "/"
+      if self.group_icon_path and not self.group_icon_path.endswith('/'):
+          self.group_icon_path += "/"
 
-        if yui.YUI.app().isTextMode():
-          self.glib_loop = GLib.MainLoop()
-          self.glib_thread = threading.Thread(target=self.glib_mainloop, args=(self.glib_loop,))
-          self.glib_thread.start()
+      if yui.YUI.app().isTextMode():
+        self.glib_loop = GLib.MainLoop()
+        self.glib_thread = threading.Thread(target=self.glib_mainloop, args=(self.glib_loop,))
+        self.glib_thread.start()
 
 
-        dnfdragora.basedragora.BaseDragora.__init__(self, self.use_comps)
+      dnfdragora.basedragora.BaseDragora.__init__(self, self.use_comps)
 
-        # setup UI
-        self._setupUI()
+      # setup UI
+      self._setupUI()
 
-        self._enableAction(False)
-        self.pbar_layout.setEnabled(True)
+      self._enableAction(False)
+      self.pbar_layout.setEnabled(True)
 
-        self.backend
-        self.dialog.pollEvent()
-        self.find_entry.setKeyboardFocus()
+      self.backend
+      self.dialog.pollEvent()
+      self.find_entry.setKeyboardFocus()
 
 
 
@@ -283,102 +274,99 @@ class mainGui(dnfdragora.basedragora.BaseDragora):
       '''
       loop.run()
 
-    def _configFileRead(self) :
-        '''
+    def _configFileRead(self):
+      '''
         reads the configuration file and sets application data
         '''
 
-        if self.config.systemSettings :
-            settings = {}
-            if 'settings' in self.config.systemSettings.keys() :
-                settings = self.config.systemSettings['settings']
+      if self.config.systemSettings:
+        settings = {}
+        if 'settings' in self.config.systemSettings.keys() :
+            settings = self.config.systemSettings['settings']
 
-            if 'use_comps' in settings.keys() :
-                self.use_comps = settings['use_comps']
+        if 'use_comps' in settings.keys() :
+            self.use_comps = settings['use_comps']
 
-            if 'always_yes' in settings.keys() :
-                self.always_yes = settings['always_yes']
+        if 'always_yes' in settings.keys() :
+            self.always_yes = settings['always_yes']
 
-            if 'log_directory' in settings.keys() :
-              print("Warning logging must be set in user preferences, discarded")
+        if 'log_directory' in settings.keys() :
+          print("Warning logging must be set in user preferences, discarded")
 
-            if 'log_level_debug' in settings.keys() :
-              print("Warning logging must be set in user preferences, discarded")
+        if 'log_level_debug' in settings.keys() :
+          print("Warning logging must be set in user preferences, discarded")
 
-            # config['settings']['path']
-            path_settings = {}
-            if 'path' in settings.keys():
-                path_settings = settings['path']
-            if 'group_icons' in path_settings.keys():
-                self.group_icon_path = path_settings['group_icons']
-            if 'images' in path_settings.keys():
-                self.images_path = path_settings['images']
+        path_settings = settings['path'] if 'path' in settings.keys() else {}
+        if 'group_icons' in path_settings.keys():
+            self.group_icon_path = path_settings['group_icons']
+        if 'images' in path_settings.keys():
+            self.images_path = path_settings['images']
 
-            # config['settings']['search']
-            search = {}
-            if 'search' in settings.keys():
-                search = settings['search']
-            if 'match_all' in search.keys():
-                self.match_all = search['match_all']
-            if 'newest_only' in search.keys():
-                self.newest_only = search['newest_only']
+        # config['settings']['search']
+        search = {}
+        if 'search' in settings.keys():
+            search = settings['search']
+        if 'match_all' in search.keys():
+            self.match_all = search['match_all']
+        if 'newest_only' in search.keys():
+            self.newest_only = search['newest_only']
 
-            # all_updates force first running without user setting configured with the view
-            # all packages and to_updates filter, fedora users coming from yumex-dnf are used to
-            # get this view. Mageia and OpenMandriva Groups and All instead
-            if 'all_updates' in settings.keys():
-              self.all_updates_filter = settings['all_updates']
+        # all_updates force first running without user setting configured with the view
+        # all packages and to_updates filter, fedora users coming from yumex-dnf are used to
+        # get this view. Mageia and OpenMandriva Groups and All instead
+        if 'all_updates' in settings.keys():
+          self.all_updates_filter = settings['all_updates']
 
-        # User preferences overriding
-        user_settings = {}
-        if self.config.userPreferences:
-            if 'settings' in self.config.userPreferences.keys() :
-                if self.config.userPreferences['settings'] is None:
-                    self.config.userPreferences['settings'] = {}
-                user_settings = self.config.userPreferences['settings']
-                #### MetaData
-                if 'metadata' in user_settings.keys():
-                  metadata = user_settings['metadata']
-                  if 'update_interval' in metadata.keys():
-                    self.md_update_interval = metadata['update_interval']
-                  else:
-                    self.md_update_interval = metadata['update_interval'] = 48
-                  if 'last_update' in metadata.keys():
-                    self.md_last_refresh_date =  metadata['last_update']
+      # User preferences overriding
+      user_settings = {}
+      if self.config.userPreferences:
+          if 'settings' in self.config.userPreferences.keys() :
+              if self.config.userPreferences['settings'] is None:
+                  self.config.userPreferences['settings'] = {}
+              user_settings = self.config.userPreferences['settings']
+              #### MetaData
+              if 'metadata' in user_settings.keys():
+                metadata = user_settings['metadata']
+                if 'update_interval' in metadata.keys():
+                  self.md_update_interval = metadata['update_interval']
                 else:
-                  self.config.userPreferences['settings']['metadata'] ={
-                    'update_interval': self.md_update_interval, # 48 Default
-                    'last_update': ''
-                  }
-                if 'upgrades as updates' in user_settings.keys():
-                  self.upgrades_as_updates = user_settings['upgrades as updates']
+                  self.md_update_interval = metadata['update_interval'] = 48
+                if 'last_update' in metadata.keys():
+                  self.md_last_refresh_date =  metadata['last_update']
+              else:
+                self.config.userPreferences['settings']['metadata'] ={
+                  'update_interval': self.md_update_interval, # 48 Default
+                  'last_update': ''
+                }
+              if 'upgrades as updates' in user_settings.keys():
+                self.upgrades_as_updates = user_settings['upgrades as updates']
 
-                #### Search
-                if 'search' in user_settings.keys():
-                    search = user_settings['search']
-                    if 'newest_only' in search.keys():
-                        self.newest_only = search['newest_only']
-                    if 'match_all' in search.keys():
-                        self.match_all = search['match_all']
-                #### Logging
-                if 'log' in user_settings.keys():
-                  log = user_settings['log']
-                  if 'enabled' in log.keys() :
-                    self.log_enabled = log['enabled']
-                  if self.log_enabled:
-                    if 'directory' in log.keys() :
-                        self.log_directory = log['directory']
-                    if 'level_debug' in log.keys() :
-                        self.level_debug = log['level_debug']
+              #### Search
+              if 'search' in user_settings.keys():
+                  search = user_settings['search']
+                  if 'newest_only' in search.keys():
+                      self.newest_only = search['newest_only']
+                  if 'match_all' in search.keys():
+                      self.match_all = search['match_all']
+              #### Logging
+              if 'log' in user_settings.keys():
+                log = user_settings['log']
+                if 'enabled' in log.keys() :
+                  self.log_enabled = log['enabled']
+                if self.log_enabled:
+                  if 'directory' in log.keys() :
+                      self.log_directory = log['directory']
+                  if 'level_debug' in log.keys() :
+                      self.level_debug = log['level_debug']
 
         # metadata settings is needed adding it to update old configuration files
-        if not 'settings' in self.config.userPreferences.keys() :
-          self.config.userPreferences['settings'] = {}
-        if not 'metadata' in self.config.userPreferences['settings'].keys():
-          self.config.userPreferences['settings']['metadata'] = {
-            'update_interval': self.md_update_interval, # 48 Default
-            'last_update': ''
-          }
+      if 'settings' not in self.config.userPreferences.keys():
+        self.config.userPreferences['settings'] = {}
+      if 'metadata' not in self.config.userPreferences['settings'].keys():
+        self.config.userPreferences['settings']['metadata'] = {
+          'update_interval': self.md_update_interval, # 48 Default
+          'last_update': ''
+        }
 
     def _setupUI(self) :
         '''

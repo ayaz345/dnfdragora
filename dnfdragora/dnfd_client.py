@@ -132,10 +132,7 @@ class DaemonError(Exception):
         self.msg = msg
 
     def __str__(self):
-        if self.msg:
-            return self.msg
-        else:
-            return ""
+        return self.msg if self.msg else ""
 
 
 class AccessDeniedError(DaemonError):
@@ -211,8 +208,9 @@ class DnfDaemonBase:
         self.daemon = self._get_daemon(bus, org, interface)
         self.__async_thread = None
 
-        logger.debug("%s daemon loaded - version :  %s" %
-                     (interface, self.daemon.GetVersion()))
+        logger.debug(
+            f"{interface} daemon loaded - version :  {self.daemon.GetVersion()}"
+        )
 
     def _get_daemon(self, bus, org, interface):
         ''' Get the daemon dbus proxy object'''
@@ -220,7 +218,7 @@ class DnfDaemonBase:
             proxy = bus.get(org, "/", interface)
             # Get daemon version, to check if it is alive
             self.running_api_version = proxy.GetVersion()
-            if not self.running_api_version == CLIENT_API_VERSION:
+            if self.running_api_version != CLIENT_API_VERSION:
                 raise APIVersionError('Client API : %d <> Server API : %s' %
                                       (CLIENT_API_VERSION,
                                       self.running_api_version))
@@ -246,13 +244,14 @@ class DnfDaemonBase:
         if exc != "":
             logger.error("Exception   : %s", exc)
             logger.error("   message  : %s", msg)
-        if exc == self.dbus_org + '.AccessDeniedError':
+        if exc == f'{self.dbus_org}.AccessDeniedError':
             raise AccessDeniedError(msg)
-        elif exc == self.dbus_org + '.LockedError':
+        elif exc == f'{self.dbus_org}.LockedError':
             raise LockedError(msg)
-        elif exc == self.dbus_org + '.TransactionError':
-            raise TransactionError(msg)
-        elif exc == self.dbus_org + '.NotImplementedError':
+        elif exc in [
+            f'{self.dbus_org}.TransactionError',
+            f'{self.dbus_org}.NotImplementedError',
+        ]:
             raise TransactionError(msg)
         else:
             raise DaemonError(str(err))
@@ -260,10 +259,7 @@ class DnfDaemonBase:
     def _parse_error(self):
         '''parse values from a DBus related exception '''
         (type, value, traceback) = sys.exc_info()
-        res = DBUS_ERR_RE.match(str(value))
-        if res:
-            return res.groups()
-        return "", ""
+        return res.groups() if (res := DBUS_ERR_RE.match(str(value))) else ("", "")
 
     def _return_handler(self, obj, result, user_data):
         '''Async DBus call, return handler '''
@@ -295,62 +291,61 @@ class DnfDaemonBase:
           'error': user_data['error'],
           }
         if user_data['result']:
-          if user_data['cmd'] == "GetPackages" \
-            or user_data['cmd'] == "GetRepo" \
-            or user_data['cmd'] == "GetConfig" \
-            or user_data['cmd'] == "GetPackagesByName"\
-            or user_data['cmd'] == 'GetGroups' \
-            or user_data['cmd'] == 'GetGroupPackages' \
-            or user_data['cmd'] == 'Search'\
-            or user_data['cmd'] == 'GetTransaction'\
-            or user_data['cmd'] == 'AddTransaction'\
-            or user_data['cmd'] == 'GroupInstall'\
-            or user_data['cmd'] == 'GroupRemove'\
-            or user_data['cmd'] == 'Install' \
-            or user_data['cmd'] == 'Remove' \
-            or user_data['cmd'] == 'Update' \
-            or user_data['cmd'] == 'Reinstall' \
-            or user_data['cmd'] == 'Downgrade' \
-            or user_data['cmd'] == 'BuildTransaction' \
-            or user_data['cmd'] == 'RunTransaction' \
-            or user_data['cmd'] == 'GetHistoryByDays' \
-            or user_data['cmd'] == 'HistorySearch' \
-            or user_data['cmd'] == 'GetHistoryPackages' \
-            or user_data['cmd'] == 'HistoryUndo' :
-             result['result'] = json.loads(user_data['result'])
-          elif user_data['cmd'] == "GetRepositories":
-             result['result'] = [str(r) for r in user_data['result']]
-          elif user_data['cmd'] == 'GetAttribute':
-            if user_data['result'] == ':none':  # illegal attribute
-              result['error'] = "Illegal attribute"
-            elif user_data['result'] == ':not_found':  # package not found
-              result['error'] = "Package not found"
-            else:
-              result['result'] = json.loads(user_data['result'])
-
-          else:
-            pass
+            if user_data['cmd'] in [
+                "GetPackages",
+                "GetRepo",
+                "GetConfig",
+                "GetPackagesByName",
+                'GetGroups',
+                'GetGroupPackages',
+                'Search',
+                'GetTransaction',
+                'AddTransaction',
+                'GroupInstall',
+                'GroupRemove',
+                'Install',
+                'Remove',
+                'Update',
+                'Reinstall',
+                'Downgrade',
+                'BuildTransaction',
+                'RunTransaction',
+                'GetHistoryByDays',
+                'HistorySearch',
+                'GetHistoryPackages',
+                'HistoryUndo',
+            ]:
+                result['result'] = json.loads(user_data['result'])
+            elif user_data['cmd'] == "GetRepositories":
+               result['result'] = [str(r) for r in user_data['result']]
+            elif user_data['cmd'] == 'GetAttribute':
+              if user_data['result'] == ':none':  # illegal attribute
+                result['error'] = "Illegal attribute"
+              elif user_data['result'] == ':not_found':  # package not found
+                result['error'] = "Package not found"
+              else:
+                result['result'] = json.loads(user_data['result'])
 
         return result
 
     def __async_thread_loop(self, data, *args):
-      '''
+        '''
       thread function for glib main loop
       '''
-      logger.debug("__async_thread_loop Command %s(%s) requested ", str(data['cmd']), str(data['args']) if data['args'] else "")
-      try:
-        func = getattr(self.daemon, data['cmd'])
+        logger.debug("__async_thread_loop Command %s(%s) requested ", str(data['cmd']), str(data['args']) if data['args'] else "")
+        try:
+            func = getattr(self.daemon, data['cmd'])
 
-        # TODO check if timeout = infinite is still needed
-        func(*args, result_handler=self._return_handler,
-              user_data=data, timeout=GObject.G_MAXINT)
-        #data['main_loop'].run()
-      except Exception as err:
-        logger.error("__async_thread_loop Exception %s"%(err))
-        data['error'] = err
+            # TODO check if timeout = infinite is still needed
+            func(*args, result_handler=self._return_handler,
+                  user_data=data, timeout=GObject.G_MAXINT)
+            #data['main_loop'].run()
+        except Exception as err:
+            logger.error(f"__async_thread_loop Exception {err}")
+            data['error'] = err
 
-      # We enqueue one request at the time by now, monitoring _sent
-      self._sent = False
+        # We enqueue one request at the time by now, monitoring _sent
+        self._sent = False
 
     def _run_dbus_async(self, cmd, *args):
         '''Make an async call to a DBus method in the yumdaemon service
@@ -359,28 +354,28 @@ class DnfDaemonBase:
         '''
         # We enqueue one request at the time by now, monitoring _sent
         if not self._sent:
-          logger.debug("run_dbus_async %s", cmd)
-          if self.__async_thread and self.__async_thread.is_alive():
-            logger.warning("run_dbus_async main loop running %s - probably last request is not terminated yet", self.__async_thread.is_alive())
-          # We enqueue one request at the time by now, monitoring _sent
-          self._sent = True
+            logger.debug("run_dbus_async %s", cmd)
+            if self.__async_thread and self.__async_thread.is_alive():
+              logger.warning("run_dbus_async main loop running %s - probably last request is not terminated yet", self.__async_thread.is_alive())
+            # We enqueue one request at the time by now, monitoring _sent
+            self._sent = True
 
-          # let's pass also args, it could be useful for debug at certain point...
-          self._data = {'cmd': cmd, 'args': args, }
+            # let's pass also args, it could be useful for debug at certain point...
+            self._data = {'cmd': cmd, 'args': args, }
 
-          data = self._data
+            data = self._data
 
-          self.__async_thread = threading.Thread(target=self.__async_thread_loop, args=(data, *args))
-          self.__async_thread.start()
+            self.__async_thread = threading.Thread(target=self.__async_thread_loop, args=(data, *args))
+            self.__async_thread.start()
         else:
-          logger.warning("run_dbus_async %s, previous command %s in progress %s, loop running %s", cmd, self._data['cmd'], self._sent, self.__async_thread.is_alive())
-          result = {
-            'result': False,
-            'error': _("Command in progress"),
-          }
+            logger.warning("run_dbus_async %s, previous command %s in progress %s, loop running %s", cmd, self._data['cmd'], self._sent, self.__async_thread.is_alive())
+            result = {
+              'result': False,
+              'error': _("Command in progress"),
+            }
 
-          self.eventQueue.put({'event': cmd, 'value': result})
-          logger.debug("Command %s executed, result %s "%(cmd, result))
+            self.eventQueue.put({'event': cmd, 'value': result})
+            logger.debug(f"Command {cmd} executed, result {result} ")
 
 
     def _run_dbus_sync(self, cmd, *args):
@@ -463,22 +458,20 @@ class DnfDaemonBase:
         this must always be called before doing other actions
         '''
         try:
-          if not sync:
-            self._run_dbus_async('Lock')
-          else:
-            result = self._run_dbus_sync('Lock')
-            return result
+            if not sync:
+                self._run_dbus_async('Lock')
+            else:
+                return self._run_dbus_sync('Lock')
         except Exception as err:
           self._handle_dbus_error(err)
 
     def Unlock(self, sync=False):
         '''Release the yum lock '''
         try:
-          if not sync:
-            self._run_dbus_async('Unlock')
-          else:
-            result = self._run_dbus_sync('Unlock')
-            return result
+            if not sync:
+                self._run_dbus_async('Unlock')
+            else:
+                return self._run_dbus_sync('Unlock')
         except Exception as err:
             self._handle_dbus_error(err)
 
@@ -521,10 +514,9 @@ class DnfDaemonBase:
     def ExpireCache(self, sync=False):
         '''Expire the dnf metadata, so they will be refresed'''
         if not sync:
-          self._run_dbus_async('ExpireCache', '()')
+            self._run_dbus_async('ExpireCache', '()')
         else:
-          result = self._run_dbus_sync('ExpireCache', '()')
-          return result
+            return self._run_dbus_sync('ExpireCache', '()')
 
 
     def GetRepositories(self, repo_filter, sync=False):
@@ -702,7 +694,7 @@ class ClientReadOnly(DnfDaemonBase):
         if signal == "RepoMetaDataProgress":
             self.on_RepoMetaDataProgress(*args)
         else:
-            logger.error("Unhandled Signal : " + signal, " Param: ", args)
+            logger.error(f"Unhandled Signal : {signal}", " Param: ", args)
 
 
 class Client(DnfDaemonBase):
@@ -731,7 +723,7 @@ class Client(DnfDaemonBase):
         elif signal == "ErrorMessage":
             self.on_ErrorMessage(*args)
         else:
-            logger.error("Unhandled Signal : " + signal, " Param: ", args)
+            logger.error(f"Unhandled Signal : {signal}", " Param: ", args)
 
 #
 # API Methods

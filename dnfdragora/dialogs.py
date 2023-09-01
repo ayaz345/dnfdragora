@@ -38,12 +38,9 @@ class HistoryView:
 
     def _getTID(self, selectedItem):
         ''' get the tid connected to selected item '''
-        tid = None
-        for t in self._tid.keys():
-            if self._tid[t] == selectedItem:
-                tid = t
-                break
-        return tid
+        return next(
+            (t for t in self._tid.keys() if self._tid[t] == selectedItem), None
+        )
 
     def _populateHistory(self, selected=None):
         '''
@@ -53,8 +50,7 @@ class HistoryView:
         itemVect = []
         if selected:
             pkgs = []
-            tid = self._getTID(selected)
-            if tid:
+            if tid := self._getTID(selected):
                 pkgs = self.parent.backend.GetHistoryPackages(tid, sync=True)
 
             # Order by package name.arch
@@ -63,7 +59,7 @@ class HistoryView:
             for elem in pkgs:
                 pkg_id, state, is_inst = elem
                 (n, e, v, r, a, repo_id) = misc.to_pkg_tuple(pkg_id)
-                na = "%s.%s" % (n, a)
+                na = f"{n}.{a}"
                 if state in const.HISTORY_UPDATE_STATES:  # part of a pair
                     if na in names_pair:
                         # this is the updating pkg
@@ -119,10 +115,8 @@ class HistoryView:
 
                     itemVect.append(cat)
 
-        itemCollection = None
         yui.YUI.app().busyCursor()
-        if selected:
-            itemCollection = yui.YItemCollection(itemVect)
+        itemCollection = yui.YItemCollection(itemVect) if selected else None
         self._historyView.startMultipleChanges()
         self._historyView.deleteAllItems()
         if selected:
@@ -169,10 +163,7 @@ class HistoryView:
             item.this.own(False)
             self._tid[tid]= item
 
-        itemVect = []
-        for year in main.keys():
-            itemVect.append(main[year]['item'])
-
+        itemVect = [value['item'] for value in main.values()]
         self._dlg .pollEvent()
 
         yui.YUI.app().busyCursor()
@@ -195,36 +186,27 @@ class HistoryView:
 
         try:
             rc, result = parent.backend.GetTransaction()
-            if rc :
+            if rc:
                 transaction_result_dlg = TransactionResult(parent)
-                ok = transaction_result_dlg.run(result)
-
-                if ok:  # Ok pressed
+                if ok := transaction_result_dlg.run(result):
                     parent.infobar.info(_('Undo transaction'))
                     rc, result = parent.backend.RunTransaction()
                     # This can happen more than once (more gpg keys to be
                     # imported)
                     while rc == 1:
-                        logger.debug('GPG key missing: %s' % repr(result))
-                        # get info about gpgkey to be comfirmed
-                        values = parent.backend._gpg_confirm
-                        if values:  # There is a gpgkey to be verified
+                        logger.debug(f'GPG key missing: {repr(result)}')
+                        if values := parent.backend._gpg_confirm:
                             (pkg_id, userid, hexkeyid, keyurl, timestamp) = values
-                            logger.debug('GPGKey : %s' % repr(values))
+                            logger.debug(f'GPGKey : {repr(values)}')
                             resp = ask_for_gpg_import(values)
                             parent.backend.ConfirmGPGImport(hexkeyid, resp)
-                            # tell the backend that the gpg key is confirmed
-                            # rerun the transaction
-                            # FIXME: It should not be needed to populate
-                            # the transaction again
-                            if resp:
-                                rc, result = parent.backend.GetTransaction()
-                                rc, result = parent.backend.RunTransaction()
-                            else:
+                            if not resp:
                                 # NOTE TODO answer no is the only way to exit, since it seems not
                                 # to install the key :(
                                 break
-                        else:  # error in signature verification
+                            rc, result = parent.backend.GetTransaction()
+                            rc, result = parent.backend.RunTransaction()
+                        else:
                             infoMsgBox({'title' : _('Error checking package signatures'),
                                                 'text' : '<br>'.join(result), 'richtext' : True })
                             break
@@ -245,7 +227,7 @@ class HistoryView:
             else:
                 logger.error('BuildTransaction failure')
                 logger.error(result)
-                s = "%s"%result
+                s = f"{result}"
                 warningMsgBox({'title' : _("Build transaction failure"), "text": s, "richtext":True})
         except dnfdaemon.client.AccessDeniedError as e:
             logger.error("dnfdaemon client AccessDeniedError: %s ", e)
@@ -255,32 +237,16 @@ class HistoryView:
             if 'AccessDeniedError' in exc:
                 logger.warning("User pressed cancel button in policykit window")
                 logger.warning("dnfdaemon client AccessDeniedError: %s ", msg)
-            else:
-                pass
-
         return performedUndo
 
     def _on_history_undo(self):
-      '''Handle the undo button'''
+        '''Handle the undo button'''
 
-      sel = self._historyTree.selectedItem()
-      tid = self._getTID(sel)
-      if tid:
-        logger.debug('History Undo : %s', tid)
-        self.parent.backend.HistoryUndo(tid)
-        ## TODO REMOVE rc, messages = self.parent.backend.HistoryUndo(tid)
-        ## TODO REMOVE if rc:
-        ## TODO REMOVE     undo = self._run_transaction()
-        ## TODO REMOVE else:
-        ## TODO REMOVE     msg = "Can't undo history transaction :\n%s" % \
-        ## TODO REMOVE         ("\n".join(messages))
-        ## TODO REMOVE     logger.debug(msg)
-        ## TODO REMOVE     warningMsgBox({
-        ## TODO REMOVE         "title": _("History undo"),
-        ## TODO REMOVE         "text":  msg,
-        ## TODO REMOVE         "richtext": False,
-        ## TODO REMOVE         })
-      return True
+        sel = self._historyTree.selectedItem()
+        if tid := self._getTID(sel):
+            logger.debug('History Undo : %s', tid)
+            self.parent.backend.HistoryUndo(tid)
+        return True
 
 
     def run(self, data):
@@ -392,7 +358,7 @@ class TransactionResult:
             level1Item.this.own(False)
 
             for pkgid, size, replaces in lvl1:
-                label = misc.pkg_id_to_full_name(pkgid) + " (" +  misc.format_number(size) + ")"
+                label = f"{misc.pkg_id_to_full_name(pkgid)} ({misc.format_number(size)})"
                 level2Item = yui.YTreeItem(level1Item, label, True)
                 level2Item.this.own(False)
 
@@ -471,15 +437,11 @@ class AboutDialog:
         self.name    = parent.appname
         self.version = const.VERSION
         self.license = "GPLv3"
-        self.authors = "<h3>%s</h3><ul><li>%s</li><li>%s</li><li>%s</li></ul>"%(
-                            _("Developers"),
-                            "Angelo Naselli &lt;anaselli@linux.it&gt;",
-                            "Neal   Gompa   &lt;ngompa13@gmail.com&gt;",
-                            "Björn  Esser   &lt;besser82@fedoraproject.org&gt;")
+        self.authors = f'<h3>{_("Developers")}</h3><ul><li>{"Angelo Naselli &lt;anaselli@linux.it&gt;"}</li><li>{"Neal   Gompa   &lt;ngompa13@gmail.com&gt;"}</li><li>{"Björn  Esser   &lt;besser82@fedoraproject.org&gt;"}</li></ul>'
         self.description = _("dnfdragora is a DNF frontend that works using GTK, ncurses and QT")
         self.dialog_mode = yui.YMGAAboutDialog.TABBED
         # TODO
-        self.logo = parent.images_path + "dnfdragora-logo.png"
+        self.logo = f"{parent.images_path}dnfdragora-logo.png"
         self.icon = parent.icon
         self.credits = ""
         self.information = ""
@@ -645,13 +607,12 @@ class RepoDialog:
         self.repoList.addItems(itemCollection)
         self.repoList.doneMultipleChanges()
 
-    def _selectedRepository(self) :
+    def _selectedRepository(self):
         '''
         gets the selected repository id from repo list, if any selected
         '''
         selected_repo = None
-        sel = self.repoList.selectedItem()
-        if sel :
+        if sel := self.repoList.selectedItem():
             for repo_id in self.itemList:
                 if (self.itemList[repo_id]['item'] == sel) :
                     selected_repo = repo_id
@@ -663,41 +624,41 @@ class RepoDialog:
         '''
         manages dialog events and returns if sack should be filled again for new enabled/disabled repositories
         '''
+        rebuild_package_list = False
+        group = None
         while True:
             event = self.dialog.waitForEvent()
 
             eventType = event.eventType()
 
-            rebuild_package_list = False
-            group = None
             #event type checking
-            if (eventType == yui.YEvent.CancelEvent) :
+            if (eventType == yui.YEvent.CancelEvent):
                 break
-            elif (eventType == yui.YEvent.WidgetEvent) :
+            elif (eventType == yui.YEvent.WidgetEvent):
                 # widget selected
                 widget  = event.widget()
-                if (widget == self.quitButton) :
+                if (widget == self.quitButton):
                     #### QUIT
                     break
-                elif (widget == self.applyButton) :
-                    enabled_repos = []
-                    for k in self.itemList.keys():
-                        if self.itemList[k]['enabled'] :
-                           enabled_repos.append(k)
-                    logger.info("Enabling repos %s "%" ".join(enabled_repos))
+                elif (widget == self.applyButton):
+                    enabled_repos = [
+                        k
+                        for k in self.itemList.keys()
+                        if self.itemList[k]['enabled']
+                    ]
+                    logger.info(f'Enabling repos {" ".join(enabled_repos)} ')
                     self.backend.SetEnabledRepos(enabled_repos)
                     return True
-                elif (widget == self.repoList) :
+                elif (widget == self.repoList):
                     wEvent = yui.toYWidgetEvent(event)
-                    if (wEvent.reason() == yui.YEvent.ValueChanged) :
-                        changedItem = self.repoList.changedItem()
-                        if changedItem :
+                    if (wEvent.reason() == yui.YEvent.ValueChanged):
+                        if changedItem := self.repoList.changedItem():
                             cell = changedItem.cellChanged()
                             for it in self.itemList:
                                 if (self.itemList[it]['item'] == changedItem) :
                                     self.itemList[it]['enabled'] = cell.checked()
                     repo_id = self._selectedRepository()
-                    s = "TODO show repo %s information<br> See https://github.com/timlau/dnf-daemon/issues/11"%(repo_id if repo_id else "---")
+                    s = f'TODO show repo {repo_id if repo_id else "---"} information<br> See https://github.com/timlau/dnf-daemon/issues/11'
                     # TODO decide what and how to show when the crash https://github.com/timlau/dnf-daemon/issues/11 is fixed
                     v=[]
                     yui.YUI.app().busyCursor()
@@ -705,30 +666,26 @@ class RepoDialog:
                         ri = self.backend.GetRepo(repo_id, sync=True)
                         logger.debug(ri)
                         for k in sorted(ri.keys()):
-                          if k == "enabled":
-                            # NOTE: skipping 'enabled' since it is fake and it is better shown as checkbox
-                            continue
-                          key = None
-                          value = ""
-                          if ri[k]:
-                            key = self.infoKeys[k] if k in self.infoKeys.keys() else k
-                            if k == 'size':
-                              value = misc.format_number(ri[k])
+                            if k == "enabled":
+                              # NOTE: skipping 'enabled' since it is fake and it is better shown as checkbox
+                              continue
+                            key = None
+                            value = ""
+                            if ri[k]:
+                                key = self.infoKeys[k] if k in self.infoKeys.keys() else k
+                                if k == 'size':
+                                    value = misc.format_number(ri[k])
+                                elif k == 'metadata_expire':
+                                    value = _('Never') if ri[k] <= -1 else _(f"{ri[k]} second(s)")
+                                else:
+                                    value = f"{ri[k]}"
                             elif k == 'metadata_expire':
-                              if ri[k] <= -1:
-                                value = _('Never')
-                              else:
-                                value = _("%s second(s)"%(ri[k]))
-                            else:
-                              value = "%s"%(ri[k])
-                          else:
-                            if k == 'metadata_expire':
-                              key = self.infoKeys[k]
-                              value = _('Now')
-                          if key:
-                            item = yui.YTableItem(key, value)
-                            item.this.own(False)
-                            v.append(item)
+                                key = self.infoKeys[k]
+                                value = _('Now')
+                            if key:
+                              item = yui.YTableItem(key, value)
+                              item.this.own(False)
+                              v.append(item)
 
                     except NameError as e:
                         logger.error("dnfdaemon NameError: %s ", e)
@@ -773,69 +730,68 @@ class OptionDialog(basedialog.BaseDialog):
     self.widget_callbacks = []
 
   def UIlayout(self, layout):
-    '''
+      '''
     dnfdragora options layout implementation
     '''
 
-    hbox_config = self.factory.createHBox(layout)
-    hbox_bottom = self.factory.createHBox(layout)
-    self.config_tree = self.factory.createTree(hbox_config, "")
-    self.config_tree.setWeight(0,30)
-    self.config_tree.setNotify(True)
-    self.eventManager.addWidgetEvent(self.config_tree, self.onChangeConfig, sendWidget=True)
+      hbox_config = self.factory.createHBox(layout)
+      hbox_bottom = self.factory.createHBox(layout)
+      self.config_tree = self.factory.createTree(hbox_config, "")
+      self.config_tree.setWeight(0,30)
+      self.config_tree.setNotify(True)
+      self.eventManager.addWidgetEvent(self.config_tree, self.onChangeConfig, sendWidget=True)
 
-    itemVect = []
-    self.option_items = {
-      "system" : None,
-      "layout" : None,
-      "search" : None,
-      "logging" : None,
-      }
-    self.selected_option = None
-    ### Options items
-    #YTreeItem self, std::string const & label, std::string const & iconName, bool isOpen=False)
-    # TODO add icons
-    item = yui.YTreeItem(_("System"))
-    item.this.own(False)
-    itemVect.append(item)
-    item.setSelected()
-    self.option_items ["system"] = item
+      self.option_items = {
+        "system" : None,
+        "layout" : None,
+        "search" : None,
+        "logging" : None,
+        }
+      self.selected_option = None
+      ### Options items
+      #YTreeItem self, std::string const & label, std::string const & iconName, bool isOpen=False)
+      # TODO add icons
+      item = yui.YTreeItem(_("System"))
+      item.this.own(False)
+      itemVect = [item]
+      item.setSelected()
+      self.option_items ["system"] = item
 
-    item = yui.YTreeItem(_("Layout"))
-    item.this.own(False)
-    itemVect.append(item)
-    self.option_items ["layout"] = item
+      item = yui.YTreeItem(_("Layout"))
+      item.this.own(False)
+      itemVect.append(item)
+      self.option_items ["layout"] = item
 
-    item = yui.YTreeItem(_("Search"))
-    item.this.own(False)
-    itemVect.append(item)
-    self.option_items ["search"] = item
+      item = yui.YTreeItem(_("Search"))
+      item.this.own(False)
+      itemVect.append(item)
+      self.option_items ["search"] = item
 
-    item = yui.YTreeItem(_("Logging"))
-    item.this.own(False)
-    itemVect.append(item)
-    self.option_items ["logging"] = item
+      item = yui.YTreeItem(_("Logging"))
+      item.this.own(False)
+      itemVect.append(item)
+      self.option_items ["logging"] = item
 
-    itemCollection = yui.YItemCollection(itemVect)
-    self.config_tree.addItems(itemCollection)
+      itemCollection = yui.YItemCollection(itemVect)
+      self.config_tree.addItems(itemCollection)
 
-    self.config_tab = self.factory.createReplacePoint(hbox_config)
-    self.config_tab.setWeight(0,70)
+      self.config_tab = self.factory.createReplacePoint(hbox_config)
+      self.config_tab.setWeight(0,70)
 
-    self.RestoreButton = self.factory.createIconButton(hbox_bottom,"",_("Restore &default"))
-    self.eventManager.addWidgetEvent(self.RestoreButton, self.onRestoreButton)
-    self.RestoreButton.setWeight(0,1)
+      self.RestoreButton = self.factory.createIconButton(hbox_bottom,"",_("Restore &default"))
+      self.eventManager.addWidgetEvent(self.RestoreButton, self.onRestoreButton)
+      self.RestoreButton.setWeight(0,1)
 
-    st = self.factory.createHStretch(hbox_bottom)
-    st.setWeight(0,1)
+      st = self.factory.createHStretch(hbox_bottom)
+      st.setWeight(0,1)
 
-    self.quitButton = self.factory.createIconButton(hbox_bottom,"",_("&Close"))
-    self.eventManager.addWidgetEvent(self.quitButton, self.onQuitEvent)
-    self.quitButton.setWeight(0,1)
-    self.dialog.setDefaultButton(self.quitButton)
+      self.quitButton = self.factory.createIconButton(hbox_bottom,"",_("&Close"))
+      self.eventManager.addWidgetEvent(self.quitButton, self.onQuitEvent)
+      self.quitButton.setWeight(0,1)
+      self.dialog.setDefaultButton(self.quitButton)
 
-    self.eventManager.addCancelEvent(self.onCancelEvent)
-    self.onChangeConfig(self.config_tree)
+      self.eventManager.addCancelEvent(self.onCancelEvent)
+      self.onChangeConfig(self.config_tree)
 
 
   def onChangeConfig(self, obj):
@@ -1020,69 +976,69 @@ class OptionDialog(basedialog.BaseDialog):
     self.dialog.recalcLayout()
 
   def _openLoggingOptions(self):
-    '''
+      '''
     show logging configuration options
     '''
-    if self.config_tab.hasChildren():
-      self.config_tab.deleteChildren()
+      if self.config_tab.hasChildren():
+        self.config_tab.deleteChildren()
 
-    hbox = self.factory.createHBox(self.config_tab)
-    self.factory.createHSpacing(hbox, 1.5)
-    vbox = self.factory.createVBox(hbox)
-    self.factory.createHSpacing(hbox, 1.5)
+      hbox = self.factory.createHBox(self.config_tab)
+      self.factory.createHSpacing(hbox, 1.5)
+      vbox = self.factory.createVBox(hbox)
+      self.factory.createHSpacing(hbox, 1.5)
 
-    # Title
-    heading=self.factory.createHeading( vbox, _("Logging options (active at next startup)") )
-    self.factory.createVSpacing(vbox, 0.3)
-    heading.setAutoWrap()
+      # Title
+      heading=self.factory.createHeading( vbox, _("Logging options (active at next startup)") )
+      self.factory.createVSpacing(vbox, 0.3)
+      heading.setAutoWrap()
 
-    log_enabled = self.parent.config.userPreferences['settings']['log']['enabled'] \
-        if 'settings' in self.parent.config.userPreferences.keys() \
-          and 'log' in self.parent.config.userPreferences['settings'].keys() \
-          and 'enabled' in self.parent.config.userPreferences['settings']['log'].keys() \
-        else False
+      log_enabled = self.parent.config.userPreferences['settings']['log']['enabled'] \
+            if 'settings' in self.parent.config.userPreferences.keys() \
+              and 'log' in self.parent.config.userPreferences['settings'].keys() \
+              and 'enabled' in self.parent.config.userPreferences['settings']['log'].keys() \
+            else False
 
-    log_directory = self.parent.config.userPreferences['settings']['log']['directory'] \
-        if 'settings' in self.parent.config.userPreferences.keys() \
-          and 'log' in self.parent.config.userPreferences['settings'].keys() \
-          and 'directory' in self.parent.config.userPreferences['settings']['log'].keys() \
-        else os.path.expanduser("~")
+      log_directory = self.parent.config.userPreferences['settings']['log']['directory'] \
+            if 'settings' in self.parent.config.userPreferences.keys() \
+              and 'log' in self.parent.config.userPreferences['settings'].keys() \
+              and 'directory' in self.parent.config.userPreferences['settings']['log'].keys() \
+            else os.path.expanduser("~")
 
-    level_debug = self.parent.config.userPreferences['settings']['log']['level_debug'] \
-        if 'settings' in self.parent.config.userPreferences.keys() \
-          and 'log' in self.parent.config.userPreferences['settings'].keys() \
-          and 'level_debug' in self.parent.config.userPreferences['settings']['log'].keys() \
-        else False
+      level_debug = self.parent.config.userPreferences['settings']['log']['level_debug'] \
+            if 'settings' in self.parent.config.userPreferences.keys() \
+              and 'log' in self.parent.config.userPreferences['settings'].keys() \
+              and 'level_debug' in self.parent.config.userPreferences['settings']['log'].keys() \
+            else False
 
-    if not 'log' in self.parent.config.userPreferences['settings'].keys():
-      self.parent.config.userPreferences['settings']['log'] = {}
+      if 'log' not in self.parent.config.userPreferences['settings'].keys():
+          self.parent.config.userPreferences['settings']['log'] = {}
 
-    self.log_enabled  = self.factory.createCheckBox(self.factory.createLeft(vbox) , _("Enable logging"), log_enabled )
-    self.log_enabled.setNotify(True)
-    self.eventManager.addWidgetEvent(self.log_enabled, self.onEnableLogging, True)
-    self.widget_callbacks.append( { 'widget': self.log_enabled, 'handler': self.onEnableLogging} )
+      self.log_enabled  = self.factory.createCheckBox(self.factory.createLeft(vbox) , _("Enable logging"), log_enabled )
+      self.log_enabled.setNotify(True)
+      self.eventManager.addWidgetEvent(self.log_enabled, self.onEnableLogging, True)
+      self.widget_callbacks.append( { 'widget': self.log_enabled, 'handler': self.onEnableLogging} )
 
-    self.log_vbox = self.factory.createVBox(vbox)
-    hbox = self.factory.createHBox(self.log_vbox)
-    self.factory.createHSpacing(hbox, 2.0)
-    self.log_directory = self.factory.createLabel(self.factory.createLeft(hbox), "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-    self.choose_dir = self.factory.createIconButton(self.factory.createLeft(hbox), "", _("Change &directory"))
-    self.eventManager.addWidgetEvent(self.choose_dir, self.onChangeLogDirectory)
-    self.widget_callbacks.append( { 'widget': self.choose_dir, 'handler': self.onChangeLogDirectory} )
+      self.log_vbox = self.factory.createVBox(vbox)
+      hbox = self.factory.createHBox(self.log_vbox)
+      self.factory.createHSpacing(hbox, 2.0)
+      self.log_directory = self.factory.createLabel(self.factory.createLeft(hbox), "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+      self.choose_dir = self.factory.createIconButton(self.factory.createLeft(hbox), "", _("Change &directory"))
+      self.eventManager.addWidgetEvent(self.choose_dir, self.onChangeLogDirectory)
+      self.widget_callbacks.append( { 'widget': self.choose_dir, 'handler': self.onChangeLogDirectory} )
 
-    self.log_directory.setText(log_directory)
-    hbox = self.factory.createHBox(self.log_vbox)
-    self.factory.createHSpacing(hbox, 2.0)
-    self.level_debug = self.factory.createCheckBox(self.factory.createLeft(hbox) , _("Debug level"), level_debug )
-    self.level_debug.setNotify(True)
-    self.eventManager.addWidgetEvent(self.level_debug, self.onLevelDebugChange, True)
-    self.widget_callbacks.append( { 'widget': self.level_debug, 'handler': self.onLevelDebugChange} )
+      self.log_directory.setText(log_directory)
+      hbox = self.factory.createHBox(self.log_vbox)
+      self.factory.createHSpacing(hbox, 2.0)
+      self.level_debug = self.factory.createCheckBox(self.factory.createLeft(hbox) , _("Debug level"), level_debug )
+      self.level_debug.setNotify(True)
+      self.eventManager.addWidgetEvent(self.level_debug, self.onLevelDebugChange, True)
+      self.widget_callbacks.append( { 'widget': self.level_debug, 'handler': self.onLevelDebugChange} )
 
-    self.log_vbox.setEnabled(log_enabled)
+      self.log_vbox.setEnabled(log_enabled)
 
-    self.factory.createVStretch(vbox)
-    self.config_tab.showChild()
-    self.dialog.recalcLayout()
+      self.factory.createVStretch(vbox)
+      self.config_tab.showChild()
+      self.dialog.recalcLayout()
 
   def onEnableLogging(self, obj) :
     '''
@@ -1098,20 +1054,19 @@ class OptionDialog(basedialog.BaseDialog):
       logger.error("Invalid object passed %s", obj.widgetClass())
 
   def onChangeLogDirectory(self):
-    '''
+      '''
     Change directory button has been invoked
     '''
-    start_dir = self.log_directory.text() if self.log_directory.text() else os.path.expanduser("~")
-    log_directory = yui.YUI.app().askForExistingDirectory(
-          start_dir,
-          _("Choose log destination directory"))
-    if log_directory:
-      self.log_directory.setText(log_directory)
-      self.dialog.recalcLayout()
-      try:
-        self.parent.config.userPreferences['settings']['log']['directory'] = self.log_directory.text()
-      except:
-        self.parent.config.userPreferences['settings']['log'] = { 'directory' : self.log_directory.text() }
+      start_dir = self.log_directory.text() if self.log_directory.text() else os.path.expanduser("~")
+      if log_directory := yui.YUI.app().askForExistingDirectory(
+          start_dir, _("Choose log destination directory")
+      ):
+          self.log_directory.setText(log_directory)
+          self.dialog.recalcLayout()
+          try:
+            self.parent.config.userPreferences['settings']['log']['directory'] = self.log_directory.text()
+          except:
+            self.parent.config.userPreferences['settings']['log'] = { 'directory' : self.log_directory.text() }
 
   def onShowAll(self, obj):
     '''
@@ -1224,37 +1179,37 @@ class OptionDialog(basedialog.BaseDialog):
     else:
       logger.error("Invalid object passed %s", obj.widgetClass())
 
-  def onRestoreButton(self) :
-    logger.debug('Restore pressed')
-    k = self.selected_option
-    if k == "system":
-      self.parent.config.userPreferences['settings']['always_yes'] = False
-      self.parent.always_yes = False
-      self.parent.config.userPreferences['settings']['interval for checking updates'] = 180
-      self.parent.config.userPreferences['settings']['metadata'] = {
-        'update_interval' :  48
-      }
-      self.parent.md_update_interval = 48
-      self._openSystemOptions()
-    elif  k == "layout":
-      self.parent.config.userPreferences['settings']['show updates at startup'] = False
-      self.parent.config.userPreferences['settings']['do not show groups at startup'] = False
-      self._openLayoutOptions()
-    elif k == "search":
-      self.parent.config.userPreferences['settings']['search'] = {
-        'match_all': True,
-        'newest_only': False,
-      }
-      self.parent.match_all = True
-      self.parent.newest_only = False
-      self._openSearchOptions()
-    elif k == "logging":
-      self.parent.config.userPreferences['settings']['log'] = {
-        'enabled': False,
-        'directory': os.path.expanduser("~"),
-        'level_debug': False,
-      }
-      self._openLoggingOptions()
+  def onRestoreButton(self):
+      logger.debug('Restore pressed')
+      k = self.selected_option
+      if k == "layout":
+          self.parent.config.userPreferences['settings']['show updates at startup'] = False
+          self.parent.config.userPreferences['settings']['do not show groups at startup'] = False
+          self._openLayoutOptions()
+      elif k == "logging":
+          self.parent.config.userPreferences['settings']['log'] = {
+            'enabled': False,
+            'directory': os.path.expanduser("~"),
+            'level_debug': False,
+          }
+          self._openLoggingOptions()
+      elif k == "search":
+          self.parent.config.userPreferences['settings']['search'] = {
+            'match_all': True,
+            'newest_only': False,
+          }
+          self.parent.match_all = True
+          self.parent.newest_only = False
+          self._openSearchOptions()
+      elif k == "system":
+          self.parent.config.userPreferences['settings']['always_yes'] = False
+          self.parent.always_yes = False
+          self.parent.config.userPreferences['settings']['interval for checking updates'] = 180
+          self.parent.config.userPreferences['settings']['metadata'] = {
+            'update_interval' :  48
+          }
+          self.parent.md_update_interval = 48
+          self._openSystemOptions()
 
   def onCancelEvent(self) :
     logger.debug("Got a cancel event")
@@ -1266,7 +1221,7 @@ class OptionDialog(basedialog.BaseDialog):
     self.ExitLoop()
 
 
-def warningMsgBox (info) :
+def warningMsgBox(info):
     '''
     This function creates an Warning dialog and show the message
     passed as input.
@@ -1288,10 +1243,7 @@ def warningMsgBox (info) :
     if ('title' in info.keys()) :
         dlg.setTitle(info['title'])
 
-    rt = False
-    if ("richtext" in info.keys()) :
-        rt = info['richtext']
-
+    rt = info['richtext'] if ("richtext" in info.keys()) else False
     if ('text' in info.keys()) :
         dlg.setText(info['text'], rt)
 
@@ -1304,7 +1256,7 @@ def warningMsgBox (info) :
     return 1
 
 
-def infoMsgBox (info) :
+def infoMsgBox(info):
     '''
     This function creates an Info dialog and show the message
     passed as input.
@@ -1326,10 +1278,7 @@ def infoMsgBox (info) :
     if ('title' in info.keys()) :
         dlg.setTitle(info['title'])
 
-    rt = False
-    if ("richtext" in info.keys()) :
-        rt = info['richtext']
-
+    rt = info['richtext'] if ("richtext" in info.keys()) else False
     if ('text' in info.keys()) :
         dlg.setText(info['text'], rt)
 
@@ -1341,7 +1290,7 @@ def infoMsgBox (info) :
 
     return 1
 
-def msgBox (info) :
+def msgBox(info):
     '''
     This function creates a dialog and show the message passed as input.
 
@@ -1362,10 +1311,7 @@ def msgBox (info) :
     if ('title' in info.keys()) :
         dlg.setTitle(info['title'])
 
-    rt = False
-    if ("richtext" in info.keys()) :
-        rt = info['richtext']
-
+    rt = info['richtext'] if ("richtext" in info.keys()) else False
     if ('text' in info.keys()) :
         dlg.setText(info['text'], rt)
 
@@ -1378,7 +1324,7 @@ def msgBox (info) :
     return 1
 
 
-def askOkCancel (info) :
+def askOkCancel(info):
     '''
     This function create an OK-Cancel dialog with a <<title>> and a
     <<text>> passed as parameters.
@@ -1405,10 +1351,7 @@ def askOkCancel (info) :
     if ('title' in info.keys()) :
         dlg.setTitle(info['title'])
 
-    rt = False
-    if ("richtext" in info.keys()) :
-        rt = info['richtext']
-
+    rt = info['richtext'] if ("richtext" in info.keys()) else False
     if ('text' in info.keys()) :
         dlg.setText(info['text'], rt)
 
@@ -1427,7 +1370,7 @@ def askOkCancel (info) :
 
     return retVal
 
-def askYesOrNo (info) :
+def askYesOrNo(info):
     '''
     This function create an Yes-No dialog with a <<title>> and a
     <<text>> passed as parameters.
@@ -1455,10 +1398,7 @@ def askYesOrNo (info) :
     if ('title' in info.keys()) :
         dlg.setTitle(info['title'])
 
-    rt = False
-    if ("richtext" in info.keys()) :
-        rt = info['richtext']
-
+    rt = info['richtext'] if ("richtext" in info.keys()) else False
     if ('text' in info.keys()) :
         dlg.setText(info['text'], rt)
 

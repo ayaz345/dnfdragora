@@ -71,10 +71,7 @@ def list_to_string(pkg_list, first_delimitier, delimiter):
 
 def pkg_id_to_full_name(pkg_id):
     (n, e, v, r, a, repo_id) = to_pkg_tuple(pkg_id)
-    if e and e != '0':
-        return "%s-%s:%s-%s.%s" % (n, e, v, r, a)
-    else:
-        return "%s-%s-%s.%s" % (n, v, r, a)
+    return f"{n}-{e}:{v}-{r}.{a}" if e and e != '0' else f"{n}-{v}-{r}.{a}"
 
 
 #def color_floats(spec):
@@ -102,10 +99,11 @@ def pkg_id_to_full_name(pkg_id):
 
 
 def is_url(url):
-    urls = re.findall(
+    return re.findall(
         r'^http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+~]|'
-        r'[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', url)
-    return urls
+        r'[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
+        url,
+    )
 
 
 def format_block(block, indent):
@@ -122,10 +120,7 @@ def parse_dbus_error():
     DBUS_ERR_RE = re.compile('.*GDBus.Error:([\w\.]*): (.*)$')
 
     (type, value, traceback) = sys.exc_info()
-    res = DBUS_ERR_RE.match(str(value))
-    if res:
-        return res.groups()
-    return "", ""
+    return res.groups() if (res := DBUS_ERR_RE.match(str(value))) else ("", "")
 
 def ExceptionHandler(func):
     """
@@ -176,11 +171,7 @@ def format_number(number, SI=0, space=' '):
                'Z',  # zetta
                'Y']  # yotta
 
-    if SI:
-        step = 1000.0
-    else:
-        step = 1024.0
-
+    step = 1000.0 if SI else 1024.0
     thresh = 999
     depth = 0
     max_depth = len(symbols) - 1
@@ -189,7 +180,7 @@ def format_number(number, SI=0, space=' '):
     # of our list.  In that event, the formatting will be screwed up,
     # but it'll still show the right number.
     while number > thresh and depth < max_depth:
-        depth = depth + 1
+        depth += 1
         number = number / step
 
     if isinstance(number, int):

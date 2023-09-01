@@ -44,7 +44,7 @@ class Package:
         '''
         fullname for the package :name-version.arch
         '''
-        return "%s-%s.%s" % (self.name, self.version, self.arch)
+        return f"{self.name}-{self.version}.{self.arch}"
 
     def get_attribute(self, attr):
         '''
@@ -81,18 +81,12 @@ class Backend:
     '''
 
     def __init__(self, frontend, filters=False):
-        if filters:
-            self.cache = PackageCacheWithFilters()
-        else:
-            self.cache = PackageCache()
+        self.cache = PackageCacheWithFilters() if filters else PackageCache()
         self.has_filters = filters
         self.frontend = frontend
 
     def get_filter(self, name):
-        if self.has_filters:
-            return self.cache.filters.get(name)
-        else:
-            return None
+        return self.cache.filters.get(name) if self.has_filters else None
 
     def exception_handler(self, e):
         """
@@ -104,8 +98,7 @@ class Backend:
         ''' Get a list of Package objects based on a filter
         ('installed', 'available'...)
         '''
-        pkgs = self.cache._get_packages(pkg_filter)
-        return pkgs
+        return self.cache._get_packages(pkg_filter)
 
 
 class BaseFilter:
@@ -139,8 +132,7 @@ class ArchFilter(BaseFilter):
 
     def run(self, pkgs):
         BaseFilter.run(self, pkgs)
-        filtered = [po for po in pkgs if po.arch in self.archs]
-        return filtered
+        return [po for po in pkgs if po.arch in self.archs]
 
     def change(self, archs):
         self.archs = archs
@@ -169,10 +161,7 @@ class Filters:
         return flt_pkgs
 
     def get(self, name):
-        if name in self._filters:
-            return self._filters[name]
-        else:
-            return None
+        return self._filters[name] if name in self._filters else None
 
 
 class PackageCache:
@@ -204,8 +193,7 @@ class PackageCache:
         get a list of packages from the cache
         @param pkg_filter: the type of packages to get
         '''
-        pkgs = list(getattr(self, str(pkg_filter)))
-        return pkgs
+        return list(getattr(self, str(pkg_filter)))
 
     def is_populated(self, pkg_filter):
         return str(pkg_filter) in self._populated
@@ -219,25 +207,16 @@ class PackageCache:
     # NOTE fedora adds package in updates also as installable
     #      so look for updates first as workaround or update list will be empty
     def _add(self, po):
-        if str(po) in self._index:  # package is in cache
+        if str(po) in self._index:
             return self._index[str(po)]
-        else:
-            target = getattr(self, const.ACTIONS_FILTER[po.action])
-            self._index[str(po)] = po
-            target.add(po)
-            return po
+        target = getattr(self, const.ACTIONS_FILTER[po.action])
+        self._index[str(po)] = po
+        target.add(po)
+        return po
 
     # @TimeFunction
     def find_packages(self, packages):
-        pkgs = []
-        i = 0
-        if packages:
-            for po in packages:
-                i += 1
-                pkgs.append(self._add(po))
-            return pkgs
-        else:
-            return []
+        return [self._add(po) for po in packages] if packages else []
 
 
 class PackageCacheWithFilters(PackageCache):

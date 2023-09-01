@@ -7,11 +7,11 @@ class CompsIcons:
     def __init__(self, rpm_groups, icon_path=None):
 
         if icon_path:
-            self.icon_path = icon_path if icon_path.endswith("/") else icon_path + "/"
+            self.icon_path = icon_path if icon_path.endswith("/") else f"{icon_path}/"
         else:
             self.icon_path = "/usr/share/pixmaps/comps/"
 
-        self.default_icon = self.icon_path + "uncategorized.png"
+        self.default_icon = f"{self.icon_path}uncategorized.png"
 
         # workaround for https://github.com/timlau/dnf-daemon/issues/9
         # generated using tools/gen-comps-category-list.sh
@@ -35,32 +35,31 @@ class CompsIcons:
         self._getID_to_map(rpm_groups, self._group_info)
 
         # adding special groups
-        if not 'All' in self._group_info.keys():
+        if 'All' not in self._group_info:
             self._group_info['All'] = {"title" : _("All")}
-        if not 'Empty' in self._group_info.keys():
+        if 'Empty' not in self._group_info:
             self._group_info['Empty'] = {"title" : _("Empty")}
-        if not 'Search' in self._group_info.keys():
+        if 'Search' not in self._group_info:
             self._group_info['Search'] = {"title" : _("Search result")}
         # packages without category are added here
-        if not "Uncategorized" in self._group_info.keys():
+        if "Uncategorized" not in self._group_info:
             self._group_info['Uncategorized'] = {"title" : _("Uncategorized")}
 
-    def _getID_to_map(self, groups, group_info, g_id=None) :
+    def _getID_to_map(self, groups, group_info, g_id=None):
         '''
         return id_to_name_map at run time
         '''
         gid = g_id
         for gl in groups:
             if (isinstance(gl, list)):
-                if (type(gl[0]) is str) :
+                if (type(gl[0]) is str):
                     if not gid:
-                        if not gl[0] in group_info.keys():
-                            group_info[gl[0]] = { "title": gl[1], 'icon': gl[0] + ".png"}
+                        if gl[0] not in group_info.keys():
+                            group_info[gl[0]] = {"title": gl[1], 'icon': f"{gl[0]}.png"}
                         gid = gl[0]
-                    else:
-                        if not gl[0] in group_info[gid].keys():
-                            group_info[gid][gl[0]] = { "title": gl[1], 'icon': gl[0] + ".png"}
-                else :
+                    elif gl[0] not in group_info[gid].keys():
+                        group_info[gid][gl[0]] = {"title": gl[1], 'icon': f"{gl[0]}.png"}
+                else:
                     self._getID_to_map(gl, group_info, gid)
 
     @property
@@ -73,7 +72,7 @@ class CompsIcons:
     def icon(self, group_path):
         group_names = group_path.split("/")
         for group_name in reversed(group_names):
-            icon_name = group_name + ".png"
+            icon_name = f"{group_name}.png"
             if group_name in self._group_info.keys():
                 if ('icon' in self._group_info[group_name].keys()):
                     icon_name = self._group_info[group_name]['icon']
